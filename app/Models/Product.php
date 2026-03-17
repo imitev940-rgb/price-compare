@@ -15,6 +15,11 @@ class Product extends Model
         'is_active',
     ];
 
+    public function priceHistories()
+{
+    return $this->hasMany(PriceHistory::class);
+}
+
     public function competitorLinks()
     {
         return $this->hasMany(CompetitorLink::class);

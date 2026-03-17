@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\CompetitorLink;
+use App\Models\PriceHistory;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class CheckCompetitorPrices extends Command
 {
@@ -13,7 +15,11 @@ class CheckCompetitorPrices extends Command
 
     public function handle()
     {
-        $links = CompetitorLink::where('is_active', 1)->get();
+        Log::info('Prices check started');
+
+        $links = CompetitorLink::with(['product', 'store'])
+            ->where('is_active', 1)
+            ->get();
 
         foreach ($links as $link) {
             $this->info('Checking: ' . $link->product_url);
@@ -28,6 +34,7 @@ class CheckCompetitorPrices extends Command
 
                 if (! $response->successful()) {
                     $this->error('Could not load page.');
+                    Log::warning('Could not load page: ' . $link->product_url);
                     continue;
                 }
 
@@ -45,15 +52,73 @@ class CheckCompetitorPrices extends Command
                         'last_checked_at' => now(),
                     ]);
 
+                    $ourPrice = $link->product?->our_price;
+                    $difference = null;
+                    $percentDifference = null;
+                    $position = null;
+                    $status = null;
+
+                    if ($ourPrice !== null) {
+                        $difference = round($ourPrice - $price, 2);
+
+                        if ((float) $price > 0) {
+                            $percentDifference = round((($ourPrice - $price) / $price) * 100, 2);
+                        }
+
+                        if ((float) $ourPrice < (float) $price) {
+                            $position = '#1 Best Price';
+                            $status = 'Cheaper';
+                        } elseif ((float) $ourPrice > (float) $price) {
+                            $position = 'Not Best Price';
+                            $status = 'More Expensive';
+                        } else {
+                            $position = 'Same Price';
+                            $status = 'Match';
+                        }
+                    }
+
+                    PriceHistory::create([
+                        'product_id' => $link->product_id,
+                        'store_id' => $link->store_id,
+                        'competitor_link_id' => $link->id,
+                        'our_price' => $ourPrice,
+                        'competitor_price' => $price,
+                        'difference' => $difference,
+                        'percent_difference' => $percentDifference,
+                        'best_competitor' => $link->store?->name,
+                        'position' => $position,
+                        'status' => $status,
+                        'checked_at' => now(),
+                    ]);
+
                     $this->info('Price updated: ' . $price);
+
+                    Log::info('Price updated', [
+                        'url' => $link->product_url,
+                        'price' => $price,
+                        'link_id' => $link->id,
+                    ]);
                 } else {
                     $this->warn('Price not found.');
+
+                    Log::warning('Price not found', [
+                        'url' => $link->product_url,
+                        'link_id' => $link->id,
+                    ]);
                 }
 
             } catch (\Throwable $e) {
                 $this->error('Error: ' . $e->getMessage());
+
+                Log::error('Price check error', [
+                    'url' => $link->product_url,
+                    'link_id' => $link->id,
+                    'message' => $e->getMessage(),
+                ]);
             }
         }
+
+        Log::info('Prices check finished');
 
         return Command::SUCCESS;
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\CompetitorLinkController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\PriceCheckController;
+use App\Http\Controllers\PriceHistoryController;
 
 Route::get('/', function () {
     return redirect('/comparison');
@@ -20,6 +21,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('links', CompetitorLinkController::class);
     Route::get('/comparison', [ComparisonController::class, 'index'])->name('comparison');
 Route::post('/prices/check', [PriceCheckController::class, 'run'])->name('prices.check');
+Route::get('/price-history', [PriceHistoryController::class, 'index'])->name('price-history.index');
 
 });
 

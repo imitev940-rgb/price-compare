@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Product;
+use App\Models\Store;
+use App\Models\PriceHistory;
 
 class CompetitorLink extends Model
 {
@@ -11,6 +14,8 @@ class CompetitorLink extends Model
         'store_id',
         'product_url',
         'last_price',
+        'last_checked_at',
+        'is_active',
     ];
 
     public function product()
@@ -21,5 +26,10 @@ class CompetitorLink extends Model
     public function store()
     {
         return $this->belongsTo(Store::class);
+    }
+
+    public function priceHistories()
+    {
+        return $this->hasMany(PriceHistory::class);
     }
 }

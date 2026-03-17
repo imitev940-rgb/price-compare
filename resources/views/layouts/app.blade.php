@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PriceHunterPro</title>
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
+
+    <!-- Lucide icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
@@ -15,13 +18,45 @@
         </div>
 
         <nav class="sidebar-nav">
-            <a href="/comparison" class="{{ request()->is('comparison') ? 'active' : '' }}">Dashboard</a>
-            <a href="/products" class="{{ request()->is('products*') ? 'active' : '' }}">Products</a>
-            <a href="/stores" class="{{ request()->is('stores*') ? 'active' : '' }}">Stores</a>
-            <a href="/links" class="{{ request()->is('links*') ? 'active' : '' }}">Competitor Links</a>
+
+            <a href="/comparison" class="{{ request()->is('comparison') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="layout-dashboard"></i>
+                    Dashboard
+                </span>
+            </a>
+
+            <a href="/products" class="{{ request()->is('products*') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="package"></i>
+                    Products
+                </span>
+            </a>
+
+            <a href="/stores" class="{{ request()->is('stores*') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="store"></i>
+                    Stores
+                </span>
+            </a>
+
+            <a href="/links" class="{{ request()->is('links*') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="link"></i>
+                    Competitor Links
+                </span>
+            </a>
+
+            <a href="/price-history" class="{{ request()->is('price-history*') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="chart-column"></i>
+                    Price History
+                </span>
+            </a>
+
         </nav>
 
-      
+        <div class="sidebar-bottom"></div>
     </aside>
 
     <main class="main-panel">
@@ -32,9 +67,7 @@
             </div>
 
             <div class="topbar-right">
-                <button class="topbar-icon" type="button" aria-label="Notifications">
-                    🔔
-                </button>
+                <button class="topbar-icon" type="button">🔔</button>
 
                 <div class="user-menu">
                     <button class="user-btn" type="button">
@@ -62,44 +95,33 @@
         <div class="panel-card">
             @yield('content')
         </div>
+
         <footer class="dashboard-footer">
+            <div>© {{ date('Y') }} PriceHunterPro</div>
+            <div>Version 1.0</div>
+            <div>Created by <strong>SITEZZY – Ivan Mitev</strong></div>
+        </footer>
 
-    <div class="footer-left">
-        © {{ date('Y') }} PriceHunterPro
-    </div>
+        <button id="scrollTopBtn">↑</button>
 
-    <div class="footer-center">
-        Version 1.0
-    </div>
+        <script>
+            const scrollBtn = document.getElementById("scrollTopBtn");
 
-    <div class="footer-right">
-        Created by <strong>SITEZZY – Ivan Mitev</strong>
-    </div>
+            window.addEventListener("scroll", function () {
+                if (window.scrollY > 10) {
+                    scrollBtn.classList.add("show");
+                } else {
+                    scrollBtn.classList.remove("show");
+                }
+            });
 
-</footer>
+            scrollBtn.onclick = function () {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            };
 
-<button id="scrollTopBtn" title="Go to top">↑</button>
-
-<script>
-const scrollBtn = document.getElementById("scrollTopBtn");
-
-window.addEventListener("scroll", function () {
-
-    if (window.scrollY > 10) {
-        scrollBtn.classList.add("show");
-    } else {
-        scrollBtn.classList.remove("show");
-    }
-
-});
-
-scrollBtn.onclick = function () {
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
-};
-</script>
+            // activate icons
+            lucide.createIcons();
+        </script>
     </main>
 </div>
 
