@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\PriceHistory;
+use App\Models\CompetitorLink;
 
 class Store extends Model
 {
@@ -12,10 +14,14 @@ class Store extends Model
         'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
     public function priceHistories()
-{
-    return $this->hasMany(PriceHistory::class);
-}
+    {
+        return $this->hasMany(PriceHistory::class);
+    }
 
     public function competitorLinks()
     {

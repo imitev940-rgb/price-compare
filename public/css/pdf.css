@@ -1,0 +1,261 @@
+@page {
+    margin: 22px 22px 18px 22px;
+}
+
+body {
+    font-family: DejaVu Sans, sans-serif;
+    font-size: 11px;
+    color: #0f172a;
+    background: #ffffff;
+}
+
+.pdf-shell {
+    width: 100%;
+}
+
+.pdf-header {
+    width: 100%;
+    margin-bottom: 18px;
+    padding: 14px 18px;
+    border: 1px solid #dbe7f5;
+    border-radius: 18px;
+    background: #f8fbff;
+}
+
+.pdf-header:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.pdf-brand {
+    float: left;
+    width: 68%;
+}
+
+.pdf-logo {
+    width: 72px;
+    height: auto;
+    vertical-align: middle;
+    margin-right: 12px;
+}
+
+.pdf-brand-text {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.pdf-brand-title {
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1.05;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.pdf-brand-subtitle {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.pdf-meta {
+    float: right;
+    width: 26%;
+    text-align: right;
+    margin-top: 8px;
+}
+
+.pdf-meta-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.pdf-meta-value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #0f172a;
+}
+
+.pdf-hero {
+    margin-bottom: 16px;
+    padding: 16px 18px;
+    border: 1px solid #e2ebf6;
+    border-radius: 18px;
+    background: #ffffff;
+}
+
+.pdf-hero-title {
+    font-size: 22px;
+    font-weight: bold;
+    color: #0f172a;
+    margin-bottom: 6px;
+}
+
+.pdf-hero-subtitle {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.pdf-stats {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.pdf-stats:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.pdf-stat-card {
+    float: left;
+    width: 31%;
+    margin-right: 3.5%;
+    padding: 12px 14px;
+    border: 1px solid #e2ebf6;
+    border-radius: 16px;
+    background: #f8fbff;
+    box-sizing: border-box;
+}
+
+.pdf-stat-card:last-child {
+    margin-right: 0;
+}
+
+.pdf-stat-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.pdf-stat-value {
+    font-size: 26px;
+    font-weight: bold;
+    color: #0f172a;
+    line-height: 1;
+}
+
+.pdf-stat-small {
+    font-size: 18px;
+}
+
+.pdf-table-wrap {
+    border: 1px solid #e2ebf6;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.pdf-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.pdf-table th {
+    background: #f8fbff;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    border: 1px solid #e5edf7;
+    padding: 8px 6px;
+    text-align: center;
+}
+
+.pdf-table td {
+    border: 1px solid #edf2f7;
+    padding: 8px 6px;
+    vertical-align: middle;
+    background: #ffffff;
+}
+
+.pdf-table tr:nth-child(even) td {
+    background: #fcfdff;
+}
+
+.product-cell {
+    width: 26%;
+    font-weight: bold;
+    color: #312e81;
+    text-align: left;
+    word-wrap: break-word;
+}
+
+.num {
+    text-align: center;
+}
+
+.pill {
+    display: inline-block;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.pill-lowest {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.pill-offers {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.pill-best {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.pill-gray {
+    background: #e5e7eb;
+    color: #475569;
+}
+
+.pill-up {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.pill-down {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.row-best td {
+    background: #f0fdf4;
+}
+
+.row-over td {
+    background: #fff7f7;
+}
+
+.row-same td {
+    background: #f8fbff;
+}
+
+.pdf-footer {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #e5edf7;
+    font-size: 10px;
+    color: #64748b;
+}
+
+.pdf-footer:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.pdf-footer div:first-child {
+    float: left;
+}
+
+.pdf-footer div:last-child {
+    float: right;
+}

@@ -9,13 +9,38 @@ use App\Models\Store;
 
 class CompetitorLinkController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $links = CompetitorLink::with(['product','store'])
-            ->latest()
-            ->paginate(15);
+        $allowedPerPage = [10, 25, 50, 100];
+        $perPage = (int) $request->get('per_page', 10);
 
-        return view('links.index', compact('links'));
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 10;
+        }
+
+        $search = trim((string) $request->get('search', ''));
+
+        $links = CompetitorLink::with(['product', 'store'])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('product_url', 'like', "%{$search}%")
+                        ->orWhereHas('product', function ($productQuery) use ($search) {
+                            $productQuery->where('name', 'like', "%{$search}%")
+                                ->orWhere('sku', 'like', "%{$search}%")
+                                ->orWhere('ean', 'like', "%{$search}%")
+                                ->orWhere('brand', 'like', "%{$search}%");
+                        })
+                        ->orWhereHas('store', function ($storeQuery) use ($search) {
+                            $storeQuery->where('name', 'like', "%{$search}%")
+                                ->orWhere('base_url', 'like', "%{$search}%");
+                        });
+                });
+            })
+            ->latest()
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return view('links.index', compact('links', 'search', 'perPage'));
     }
 
     public function create()
@@ -23,7 +48,7 @@ class CompetitorLinkController extends Controller
         $products = Product::orderBy('name')->get();
         $stores = Store::orderBy('name')->get();
 
-        return view('links.create', compact('products','stores'));
+        return view('links.create', compact('products', 'stores'));
     }
 
     public function store(Request $request)
@@ -44,7 +69,7 @@ class CompetitorLinkController extends Controller
 
         return redirect()
             ->route('links.index')
-            ->with('success','Competitor link created successfully.');
+            ->with('success', 'Competitor link created successfully.');
     }
 
     public function edit(CompetitorLink $link)
@@ -52,7 +77,7 @@ class CompetitorLinkController extends Controller
         $products = Product::orderBy('name')->get();
         $stores = Store::orderBy('name')->get();
 
-        return view('links.edit', compact('link','products','stores'));
+        return view('links.edit', compact('link', 'products', 'stores'));
     }
 
     public function update(Request $request, CompetitorLink $link)
@@ -73,7 +98,7 @@ class CompetitorLinkController extends Controller
 
         return redirect()
             ->route('links.index')
-            ->with('success','Competitor link updated successfully.');
+            ->with('success', 'Competitor link updated successfully.');
     }
 
     public function destroy(CompetitorLink $link)
@@ -82,6 +107,6 @@ class CompetitorLinkController extends Controller
 
         return redirect()
             ->route('links.index')
-            ->with('success','Competitor link deleted successfully.');
+            ->with('success', 'Competitor link deleted successfully.');
     }
 }

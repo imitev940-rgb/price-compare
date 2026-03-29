@@ -8,29 +8,36 @@
     </div>
 @endif
 
-<div class="cmp-page-head">
+<div class="cmp-page-head cmp-page-head-modern">
     <div>
         <h1 class="cmp-title">Price History</h1>
         <p class="cmp-subtitle">Track all saved competitor price checks over time.</p>
     </div>
 </div>
 
-<form method="GET" action="{{ route('price-history.index') }}" style="margin-bottom: 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-    <select name="product_id" style="max-width: 320px;">
-        <option value="">All products</option>
-        @foreach($products as $product)
-            <option value="{{ $product->id }}" {{ request('product_id') == $product->id ? 'selected' : '' }}>
-                {{ $product->name }}
-            </option>
-        @endforeach
-    </select>
+<div class="cmp-toolbar-shell">
+    <form method="GET" action="{{ route('price-history.index') }}" class="cmp-toolbar-form" id="priceHistorySearchForm">
+        <div class="cmp-toolbar-main">
+            <div class="cmp-toolbar-field cmp-toolbar-field-search cmp-toolbar-field-search-compact">
+                <label class="cmp-toolbar-label">Search</label>
+                <input
+                    type="text"
+                    name="search"
+                    id="priceHistorySearchInput"
+                    value="{{ request('search') }}"
+                    placeholder="Search product, SKU, brand, store..."
+                    class="cmp-toolbar-input"
+                >
+            </div>
+        </div>
 
-    <button type="submit" class="btn">Filter</button>
-
-    @if(request('product_id'))
-        <a href="{{ route('price-history.index') }}" class="btn">Clear</a>
-    @endif
-</form>
+        @if(request('search'))
+            <div class="cmp-toolbar-side">
+                <a href="{{ route('price-history.index') }}" class="btn">Clear</a>
+            </div>
+        @endif
+    </form>
+</div>
 
 <div class="cmp-table-wrap">
     <table class="cmp-table">
@@ -133,5 +140,24 @@
 <div style="margin-top: 20px;">
     {{ $histories->withQueryString()->links() }}
 </div>
+
+<script>
+    let priceHistorySearchTimeout = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('priceHistorySearchInput');
+        const searchForm = document.getElementById('priceHistorySearchForm');
+
+        if (searchInput && searchForm) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(priceHistorySearchTimeout);
+
+                priceHistorySearchTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 500);
+            });
+        }
+    });
+</script>
 
 @endsection

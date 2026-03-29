@@ -2,76 +2,111 @@
 
 @section('content')
 
+<div class="cmp-page-head cmp-page-head-modern">
+    <div>
+        <h1 class="cmp-title">{{ __('messages.products') }}</h1>
+    </div>
+
+   <div class="cmp-page-head-actions">
+    <a href="{{ route('products.import.create') }}" class="btn">
+        Import Products
+    </a>
+
+    <a href="{{ route('products.create') }}" class="btn">
+        {{ __('messages.add_product') }}
+    </a>
+</div>
+</div>
+
 @if(session('success'))
     <div class="alert-success">
         {{ session('success') }}
     </div>
 @endif
 
-<div class="cmp-page-head">
-    <div>
-        <h1 class="cmp-title">Products</h1>
-        <p class="cmp-subtitle">Manage your tracked products.</p>
-    </div>
+<div class="cmp-toolbar-shell">
+    <form method="GET" class="cmp-toolbar-form" id="productsSearchForm">
+        <div class="cmp-toolbar-main">
+            <div class="cmp-toolbar-field cmp-toolbar-field-search cmp-toolbar-field-search-compact">
+                <label class="cmp-toolbar-label">{{ __('messages.search') }}</label>
+                <input
+                    type="text"
+                    name="search"
+                    id="productsSearchInput"
+                    value="{{ request('search') }}"
+                    placeholder="{{ __('messages.search_products') }}"
+                    class="cmp-toolbar-input"
+                >
+            </div>
 
-    <a href="{{ route('products.create') }}" class="btn">Add Product</a>
+            <div class="cmp-toolbar-field cmp-toolbar-field-small">
+                <label for="per_page" class="cmp-toolbar-label">{{ __('messages.per_page') }}</label>
+                <select id="per_page" name="per_page" class="cmp-toolbar-select" onchange="this.form.submit()">
+                    <option value="10" {{ (int) request('per_page', 10) === 10 ? 'selected' : '' }}>10</option>
+                    <option value="25" {{ (int) request('per_page') === 25 ? 'selected' : '' }}>25</option>
+                    <option value="50" {{ (int) request('per_page') === 50 ? 'selected' : '' }}>50</option>
+                    <option value="100" {{ (int) request('per_page') === 100 ? 'selected' : '' }}>100</option>
+                </select>
+            </div>
+        </div>
+    </form>
 </div>
-
-<form method="GET" action="{{ route('products.index') }}" class="cmp-search-form" style="margin-bottom: 20px;">
-    <input
-        type="text"
-        name="search"
-        class="cmp-search-input"
-        placeholder="Search by name, SKU, EAN or brand..."
-        value="{{ request('search') }}"
-    >
-    <button type="submit" class="btn">Search</button>
-</form>
 
 <div class="cmp-table-wrap">
     <table class="cmp-table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>SKU</th>
-                <th>EAN</th>
-                <th>Brand</th>
-                <th>Our Price</th>
-                <th>Status</th>
-                <th style="width: 320px;">Actions</th>
+                <th>{{ __('messages.name') }}</th>
+                <th>{{ __('messages.sku') }}</th>
+                <th>{{ __('messages.ean') }}</th>
+                <th>{{ __('messages.brand') }}</th>
+                <th>{{ __('messages.our_price') }}</th>
+                <th>{{ __('messages.status') }}</th>
+                <th>{{ __('messages.actions') }}</th>
             </tr>
         </thead>
+
         <tbody>
             @forelse($products as $product)
                 <tr>
                     <td>{{ $product->name }}</td>
-                    <td>{{ $product->sku ?: '—' }}</td>
-                    <td>{{ $product->ean ?: '—' }}</td>
-                    <td>{{ $product->brand ?: '—' }}</td>
-                    <td>{{ number_format($product->our_price, 2) }} €</td>
+                    <td>{{ $product->sku }}</td>
+                    <td>{{ $product->ean }}</td>
+                    <td>{{ $product->brand }}</td>
+                    <td>{{ $product->our_price }}</td>
+
                     <td>
                         @if($product->is_active)
-                            <span class="badge-green">Active</span>
+                            <span class="badge-green">{{ __('messages.active') }}</span>
                         @else
-                            <span class="badge-red">Inactive</span>
+                            <span class="badge-red">{{ __('messages.inactive') }}</span>
                         @endif
                     </td>
-                    <td>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <a href="{{ route('products.show', $product) }}" class="btn">View</a>
-                            <a href="{{ route('products.edit', $product) }}" class="btn">Edit</a>
 
-                            <form action="{{ route('products.destroy', $product) }}" method="POST" onsubmit="return confirm('Сигурен ли си, че искаш да изтриеш този продукт?');">
+                    <td>
+                        <div class="table-actions">
+                            <a href="{{ route('products.show', $product) }}" class="icon-btn" title="{{ __('messages.view') }}" aria-label="{{ __('messages.view') }}">
+                                <i data-lucide="eye"></i>
+                            </a>
+
+                            <a href="{{ route('products.edit', $product) }}" class="icon-btn" title="{{ __('messages.edit') }}" aria-label="{{ __('messages.edit') }}">
+                                <i data-lucide="pencil"></i>
+                            </a>
+
+                            <form action="{{ route('products.destroy', $product) }}" method="POST" onsubmit="return confirm('{{ __('messages.delete_confirm') }}')">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn">Delete</button>
+
+                                <button type="submit" class="icon-btn danger" title="{{ __('messages.delete') }}" aria-label="{{ __('messages.delete') }}">
+                                    <i data-lucide="trash-2"></i>
+                                </button>
                             </form>
                         </div>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">Няма добавени продукти.</td>
+                    <td colspan="7">{{ __('messages.no_products') }}</td>
                 </tr>
             @endforelse
         </tbody>
@@ -81,5 +116,24 @@
 <div style="margin-top:20px;">
     {{ $products->links() }}
 </div>
+
+<script>
+    let productsSearchTimeout = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('productsSearchInput');
+        const searchForm = document.getElementById('productsSearchForm');
+
+        if (searchInput && searchForm) {
+            searchInput.addEventListener('input', function () {
+                clearTimeout(productsSearchTimeout);
+
+                productsSearchTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 500);
+            });
+        }
+    });
+</script>
 
 @endsection

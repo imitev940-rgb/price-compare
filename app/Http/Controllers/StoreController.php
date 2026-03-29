@@ -7,11 +7,29 @@ use App\Models\Store;
 
 class StoreController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $stores = Store::latest()->paginate(15);
+        $allowedPerPage = [10, 25, 50, 100];
+        $perPage = (int) $request->get('per_page', 10);
 
-        return view('stores.index', compact('stores'));
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 10;
+        }
+
+        $search = trim((string) $request->get('search', ''));
+
+        $stores = Store::query()
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('base_url', 'like', "%{$search}%");
+                });
+            })
+            ->latest()
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return view('stores.index', compact('stores', 'search', 'perPage'));
     }
 
     public function create()
@@ -23,12 +41,12 @@ class StoreController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'url' => 'nullable|url|max:255',
+            'base_url' => 'nullable|url|max:255',
         ]);
 
         Store::create($request->only([
             'name',
-            'url',
+            'base_url',
         ]));
 
         return redirect()->route('stores.index')
@@ -49,12 +67,12 @@ class StoreController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'url' => 'nullable|url|max:255',
+            'base_url' => 'nullable|url|max:255',
         ]);
 
         $store->update($request->only([
             'name',
-            'url',
+            'base_url',
         ]));
 
         return redirect()->route('stores.index')

@@ -14,4 +14,4 @@ Artisan::command('inspire', function () {
 |--------------------------------------------------------------------------
 */
 
-Schedule::command('prices:check')->hourly();
+Schedule::command('prices:check')->everyFiveMinutes();
