@@ -67,7 +67,7 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::put('/settings', [SettingsController::class, 'update'])
         ->name('settings.update');
 
-    // ===============================
+        // ===============================
     // IMPORT ROUTES
     // ===============================
     Route::get('/products/import', [ProductImportController::class, 'create'])
@@ -76,14 +76,17 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::post('/products/import', [ProductImportController::class, 'store'])
         ->name('products.import.store');
 
-    Route::get('/products/import/{importJob}', [ProductImportController::class, 'show'])
-        ->name('products.import.show');
-
-    Route::get('/products/import/{importJob}/status', [ProductImportController::class, 'status'])
-        ->name('products.import.status');
-
+    // 🔥 ВАЖНО: template ПРЕДИ dynamic route
     Route::get('/products/import/template', [ProductImportController::class, 'downloadTemplate'])
         ->name('products.import.template');
+
+    Route::get('/products/import/{importJob}/status', [ProductImportController::class, 'status'])
+        ->whereNumber('importJob')
+        ->name('products.import.status');
+
+    Route::get('/products/import/{importJob}', [ProductImportController::class, 'show'])
+        ->whereNumber('importJob')
+        ->name('products.import.show');
 
     // ===============================
     // PRODUCTS
