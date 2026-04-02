@@ -11,9 +11,6 @@ use Illuminate\Support\Str;
 
 class AutoProductSearchService
 {
-    protected static bool $zoraWarmedUp     = false;
-    protected static ?array $zoraSitemapUrls = null;
-
     private const SCORE_ACCEPT   = 80;
     private const SCORE_FALLBACK = 55;
     private const SCORE_URL_HINT = 20;
@@ -30,13 +27,15 @@ class AutoProductSearchService
             'Pazaruvaj'    => fn () => $this->searchPazaruvajUrl($product),
             'Technopolis'  => fn () => $this->searchTechnopolisUrl($product),
             'Technomarket' => fn () => $this->searchTechnomarketUrl($product),
-            'Zora'         => fn () => $this->searchZoraUrl($product),
+            'Techmart'     => fn () => $this->searchTechmartUrl($product),
+            'Tehnomix'     => fn () => $this->searchTehnomixUrl($product),
         ];
 
         foreach ($stores as $storeName => $resolver) {
             if ($onlyStoreNorm !== null && mb_strtolower($storeName) !== $onlyStoreNorm) {
                 continue;
             }
+
             try {
                 $store = Store::firstOrCreate(
                     ['name' => $storeName],
@@ -44,15 +43,16 @@ class AutoProductSearchService
                 );
 
                 $existing = CompetitorLink::where('product_id', $product->id)
-                    ->where('store_id', $store->id)->first();
+                    ->where('store_id', $store->id)
+                    ->first();
 
-                if ($existing && !$overwrite) {
+                if ($existing && ! $overwrite) {
                     continue;
                 }
 
                 $url = $resolver();
 
-                if (!$url) {
+                if (! $url) {
                     Log::info('Auto search no url found', [
                         'product_id' => $product->id,
                         'store'      => $storeName,
@@ -80,19 +80,14 @@ class AutoProductSearchService
         }
     }
 
-    public static function resetSitemapCache(): void
-    {
-        static::$zoraSitemapUrls = null;
-        static::$zoraWarmedUp    = false;
-    }
-
     // ================================================================
     // PAZARUVAJ
     // ================================================================
 
     protected function searchPazaruvajUrl(Product $product): ?string
     {
-        $bestUrl = null; $bestScore = -999;
+        $bestUrl = null;
+        $bestScore = -999;
 
         foreach (array_slice($this->buildProgressiveQueries($product), 0, 16) as $query) {
             try {
@@ -100,32 +95,52 @@ class AutoProductSearchService
                     ->withHeaders($this->headers('https://www.pazaruvaj.com/'))
                     ->get('https://www.pazaruvaj.com/CategorySearch.php?st=' . urlencode($query));
 
-                if (!$resp->successful()) continue;
+                if (! $resp->successful()) {
+                    continue;
+                }
 
                 preg_match_all('/https:\/\/www\.pazaruvaj\.com\/p\/[^"\'<>\s]+/i', $resp->body(), $m);
 
-                foreach (array_values(array_unique($m[0] ?? [])) as $c) {
-                    $u = $this->cleanUrl($c);
+                foreach (array_values(array_unique($m[0] ?? [])) as $candidate) {
+                    $u = $this->cleanUrl($candidate);
+
                     [$s] = $this->computeMatchScore($u, '', $product);
-                    if ($s > $bestScore) { $bestScore = $s; $bestUrl = $u; }
+
+                    if ($s > $bestScore) {
+                        $bestScore = $s;
+                        $bestUrl = $u;
+                    }
 
                     if ($s >= self::SCORE_ACCEPT) {
                         $html = $this->fetchHtml($u, 'https://www.pazaruvaj.com/');
                         [$ps] = $this->computeMatchScore($u, (string) $html, $product);
+
                         if ($ps >= self::SCORE_ACCEPT) {
-                            Log::info('Pazaruvaj found', ['product_id' => $product->id, 'url' => $u, 'score' => $ps]);
+                            Log::info('Pazaruvaj found', [
+                                'product_id' => $product->id,
+                                'url'        => $u,
+                                'score'      => $ps,
+                            ]);
+
                             return $u;
                         }
                     }
                 }
-            } catch (\Throwable) {}
+            } catch (\Throwable) {
+            }
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
             $html = $this->fetchHtml($bestUrl, 'https://www.pazaruvaj.com/');
             [$ps] = $this->computeMatchScore($bestUrl, (string) $html, $product);
+
             if ($ps >= self::SCORE_FALLBACK) {
-                Log::info('Pazaruvaj fallback', ['product_id' => $product->id, 'url' => $bestUrl, 'score' => $ps]);
+                Log::info('Pazaruvaj fallback', [
+                    'product_id' => $product->id,
+                    'url'        => $bestUrl,
+                    'score'      => $ps,
+                ]);
+
                 return $bestUrl;
             }
         }
@@ -139,7 +154,11 @@ class AutoProductSearchService
 
     protected function searchTechnopolisUrl(Product $product): ?string
     {
-        $bestUrl = null; $bestScore = -999;
+        $bestUrl   = null;
+        $bestScore = -999;
+
+        $primary = $this->getPrimaryIdentifier($product);
+        $sku     = trim((string) ($product->sku ?? ''));
 
         foreach (array_slice($this->buildProgressiveQueries($product), 0, 14) as $query) {
             $searchUrls = [
@@ -149,20 +168,81 @@ class AutoProductSearchService
 
             foreach ($searchUrls as $searchUrl) {
                 $html = $this->fetchHtml($searchUrl, 'https://www.technopolis.bg/');
-                if (!$html) continue;
+                if (! $html) {
+                    continue;
+                }
 
                 foreach ($this->extractTechnopolisProductUrls($html) as $u) {
                     [$s] = $this->computeMatchScore($u, '', $product);
-                    if ($s > $bestScore) { $bestScore = $s; $bestUrl = $u; }
+
+                    if ($s > $bestScore) {
+                        $bestScore = $s;
+                        $bestUrl   = $u;
+                    }
 
                     if ($s >= self::SCORE_URL_HINT) {
                         $pageHtml = $this->fetchHtml($u, 'https://www.technopolis.bg/');
-                        if (!$pageHtml) continue;
+                        if (! $pageHtml) {
+                            continue;
+                        }
+
+                        // Проверка — моделът трябва да е в URL-а
+                        if ($primary || $sku) {
+                            $identifier = $primary ?: $sku;
+                            $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower($u));
+                            $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                            $foundMatch = false;
+                            if ($idFlat !== '') {
+                                if (str_contains($uSlug, $idFlat)) {
+                                    $foundMatch = true;
+                                }
+                                if (! $foundMatch) {
+                                    for ($len = min(strlen($idFlat) - 1, 8); $len >= 5; $len--) {
+                                        $prefix = substr($idFlat, 0, $len);
+                                        $pos    = strpos($uSlug, $prefix);
+                                        if ($pos !== false) {
+                                            $after = $pos + $len;
+                                            if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                                $foundMatch = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (! $foundMatch) {
+                                Log::debug('Technopolis skip wrong model', [
+                                    'product_id' => $product->id,
+                                    'url'        => $u,
+                                    'expected'   => $idFlat,
+                                ]);
+                                continue;
+                            }
+                        }
+
                         [$ps, $why] = $this->computeMatchScore($u, $pageHtml, $product);
-                        Log::debug('Technopolis candidate', ['product_id' => $product->id, 'url' => $u, 'score' => $ps, 'why' => $why]);
-                        if ($ps > $bestScore) { $bestScore = $ps; $bestUrl = $u; }
+
+                        Log::debug('Technopolis candidate', [
+                            'product_id' => $product->id,
+                            'url'        => $u,
+                            'score'      => $ps,
+                            'why'        => $why,
+                        ]);
+
+                        if ($ps > $bestScore) {
+                            $bestScore = $ps;
+                            $bestUrl   = $u;
+                        }
+
                         if ($ps >= self::SCORE_ACCEPT) {
-                            Log::info('Technopolis found', ['product_id' => $product->id, 'url' => $u, 'score' => $ps]);
+                            Log::info('Technopolis found', [
+                                'product_id' => $product->id,
+                                'url'        => $u,
+                                'score'      => $ps,
+                            ]);
+
                             return $u;
                         }
                     }
@@ -171,7 +251,48 @@ class AutoProductSearchService
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            Log::info('Technopolis fallback', ['product_id' => $product->id, 'url' => $bestUrl, 'score' => $bestScore]);
+            // Fallback проверка
+            if ($primary || $sku) {
+                $identifier = $primary ?: $sku;
+                $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower($bestUrl));
+                $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                $foundMatch = false;
+                if ($idFlat !== '') {
+                    if (str_contains($uSlug, $idFlat)) {
+                        $foundMatch = true;
+                    }
+                    if (! $foundMatch) {
+                        for ($len = min(strlen($idFlat) - 1, 8); $len >= 5; $len--) {
+                            $prefix = substr($idFlat, 0, $len);
+                            $pos    = strpos($uSlug, $prefix);
+                            if ($pos !== false) {
+                                $after = $pos + $len;
+                                if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                    $foundMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (! $foundMatch) {
+                    Log::info('Technopolis fallback rejected wrong model', [
+                        'product_id' => $product->id,
+                        'url'        => $bestUrl,
+                        'expected'   => $idFlat,
+                    ]);
+                    return null;
+                }
+            }
+
+            Log::info('Technopolis fallback', [
+                'product_id' => $product->id,
+                'url'        => $bestUrl,
+                'score'      => $bestScore,
+            ]);
+
             return $bestUrl;
         }
 
@@ -180,7 +301,8 @@ class AutoProductSearchService
 
     protected function extractTechnopolisProductUrls(string $html): array
     {
-        $urls = []; $seen = [];
+        $urls = [];
+        $seen = [];
 
         preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m1);
         preg_match_all('/"url"\s*:\s*"([^"]+)"/i', $html, $m2);
@@ -189,16 +311,30 @@ class AutoProductSearchService
         foreach (array_merge($m1[1] ?? [], $m2[1] ?? [], $m3[1] ?? []) as $href) {
             $href = str_replace('\/', '/', (string) $href);
             $href = html_entity_decode(trim($href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            if ($href === '') continue;
-            if (!Str::contains($href, 'technopolis.bg') && !Str::startsWith($href, '/')) continue;
+
+            if ($href === '') {
+                continue;
+            }
+
+            if (! Str::contains($href, 'technopolis.bg') && ! Str::startsWith($href, '/')) {
+                continue;
+            }
 
             $abs  = $this->cleanUrl($this->makeAbsoluteUrl($href, 'https://www.technopolis.bg'));
             $path = parse_url($abs, PHP_URL_PATH) ?? '';
 
-            if (!preg_match('#/p/\d+#i', $path)) continue;
-            if (preg_match('#/(search|compare|cart|wishlist|account|checkout)#i', $abs)) continue;
+            if (! preg_match('#/p/\d+#i', $path)) {
+                continue;
+            }
 
-            if (!isset($seen[$abs])) { $seen[$abs] = true; $urls[] = $abs; }
+            if (preg_match('#/(search|compare|cart|wishlist|account|checkout)#i', $abs)) {
+                continue;
+            }
+
+            if (! isset($seen[$abs])) {
+                $seen[$abs] = true;
+                $urls[] = $abs;
+            }
         }
 
         return $urls;
@@ -210,27 +346,93 @@ class AutoProductSearchService
 
     protected function searchTechnomarketUrl(Product $product): ?string
     {
-        $bestUrl = null; $bestScore = -999;
+        $bestUrl   = null;
+        $bestScore = -999;
+
+        $primary = $this->getPrimaryIdentifier($product);
+        $sku     = trim((string) ($product->sku ?? ''));
 
         foreach (array_slice($this->buildProgressiveQueries($product), 0, 16) as $query) {
             $html = $this->fetchHtml(
                 'https://www.technomarket.bg/search?query=' . urlencode($query),
                 'https://www.technomarket.bg/'
             );
-            if (!$html) continue;
+
+            if (! $html) {
+                continue;
+            }
 
             foreach ($this->extractTechnomarketProductUrls($html) as $u) {
                 [$s] = $this->computeMatchScore($u, '', $product);
-                if ($s > $bestScore) { $bestScore = $s; $bestUrl = $u; }
+
+                if ($s > $bestScore) {
+                    $bestScore = $s;
+                    $bestUrl   = $u;
+                }
 
                 if ($s >= self::SCORE_URL_HINT) {
                     $pageHtml = $this->fetchHtml($u, 'https://www.technomarket.bg/');
-                    if (!$pageHtml) continue;
+                    if (! $pageHtml) {
+                        continue;
+                    }
+
+                    // Проверка по URL — моделът трябва да съвпада точно или truncated
+                    if ($primary || $sku) {
+                        $identifier = $primary ?: $sku;
+                        $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($u, PHP_URL_PATH) ?? '')));
+                        $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                        $foundMatch = false;
+                        if ($idFlat !== '') {
+                            if (str_contains($uSlug, $idFlat)) {
+                                $foundMatch = true;
+                            }
+                            if (! $foundMatch) {
+                                for ($len = min(strlen($idFlat) - 1, 8); $len >= 5; $len--) {
+                                    $prefix = substr($idFlat, 0, $len);
+                                    $pos    = strpos($uSlug, $prefix);
+                                    if ($pos !== false) {
+                                        $after = $pos + $len;
+                                        if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                            $foundMatch = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (! $foundMatch) {
+                            Log::debug('Technomarket skip wrong model', [
+                                'product_id' => $product->id,
+                                'url'        => $u,
+                                'expected'   => $idFlat,
+                            ]);
+                            continue;
+                        }
+                    }
+
                     [$ps, $why] = $this->computeMatchScore($u, $pageHtml, $product);
-                    Log::debug('Technomarket candidate', ['product_id' => $product->id, 'url' => $u, 'score' => $ps, 'why' => $why]);
-                    if ($ps > $bestScore) { $bestScore = $ps; $bestUrl = $u; }
+
+                    Log::debug('Technomarket candidate', [
+                        'product_id' => $product->id,
+                        'url'        => $u,
+                        'score'      => $ps,
+                        'why'        => $why,
+                    ]);
+
+                    if ($ps > $bestScore) {
+                        $bestScore = $ps;
+                        $bestUrl   = $u;
+                    }
+
                     if ($ps >= self::SCORE_ACCEPT) {
-                        Log::info('Technomarket found', ['product_id' => $product->id, 'url' => $u, 'score' => $ps]);
+                        Log::info('Technomarket found', [
+                            'product_id' => $product->id,
+                            'url'        => $u,
+                            'score'      => $ps,
+                        ]);
+
                         return $u;
                     }
                 }
@@ -238,7 +440,48 @@ class AutoProductSearchService
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            Log::info('Technomarket fallback', ['product_id' => $product->id, 'url' => $bestUrl, 'score' => $bestScore]);
+            // Fallback проверка — същата логика
+            if ($primary || $sku) {
+                $identifier = $primary ?: $sku;
+                $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($bestUrl, PHP_URL_PATH) ?? '')));
+                $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                $foundMatch = false;
+                if ($idFlat !== '') {
+                    if (str_contains($uSlug, $idFlat)) {
+                        $foundMatch = true;
+                    }
+                    if (! $foundMatch) {
+                        for ($len = min(strlen($idFlat) - 1, 8); $len >= 5; $len--) {
+                            $prefix = substr($idFlat, 0, $len);
+                            $pos    = strpos($uSlug, $prefix);
+                            if ($pos !== false) {
+                                $after = $pos + $len;
+                                if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                    $foundMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (! $foundMatch) {
+                    Log::info('Technomarket fallback rejected wrong model', [
+                        'product_id' => $product->id,
+                        'url'        => $bestUrl,
+                        'expected'   => $idFlat,
+                    ]);
+                    return null;
+                }
+            }
+
+            Log::info('Technomarket fallback', [
+                'product_id' => $product->id,
+                'url'        => $bestUrl,
+                'score'      => $bestScore,
+            ]);
+
             return $bestUrl;
         }
 
@@ -247,7 +490,8 @@ class AutoProductSearchService
 
     protected function extractTechnomarketProductUrls(string $html): array
     {
-        $urls = []; $seen = [];
+        $urls = [];
+        $seen = [];
         $hardBlock = ['/cart', '/wishlist', '/account', '/checkout', '/search', '/category', '/brand', '/filter'];
         $imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.pdf'];
 
@@ -255,330 +499,676 @@ class AutoProductSearchService
 
         foreach (($m[1] ?? []) as $href) {
             $href = html_entity_decode(trim((string) $href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            if ($href === '') continue;
-            if (!Str::contains($href, 'technomarket.bg') && !Str::startsWith($href, '/')) continue;
+
+            if ($href === '') {
+                continue;
+            }
+
+            if (! Str::contains($href, 'technomarket.bg') && ! Str::startsWith($href, '/')) {
+                continue;
+            }
 
             $abs  = $this->cleanUrl($this->makeAbsoluteUrl($href, 'https://www.technomarket.bg'));
             $path = parse_url($abs, PHP_URL_PATH) ?? '';
-            if ($path === '' || $path === '/') continue;
+
+            if ($path === '' || $path === '/') {
+                continue;
+            }
 
             $skip = false;
-            foreach ($hardBlock as $b) { if (Str::contains($abs, $b)) { $skip = true; break; } }
-            foreach ($imageExts as $e) { if (Str::endsWith(mb_strtolower($abs), $e)) { $skip = true; break; } }
-            if ($skip) continue;
+
+            foreach ($hardBlock as $b) {
+                if (Str::contains($abs, $b)) {
+                    $skip = true;
+                    break;
+                }
+            }
+
+            foreach ($imageExts as $e) {
+                if (Str::endsWith(mb_strtolower($abs), $e)) {
+                    $skip = true;
+                    break;
+                }
+            }
+
+            if ($skip) {
+                continue;
+            }
 
             $segments = array_filter(explode('/', trim($path, '/')));
-            if (count($segments) < 2) continue;
+            if (count($segments) < 2) {
+                continue;
+            }
 
-            if (!isset($seen[$abs])) { $seen[$abs] = true; $urls[] = $abs; }
+            if (! isset($seen[$abs])) {
+                $seen[$abs] = true;
+                $urls[] = $abs;
+            }
         }
 
         return $urls;
     }
 
     // ================================================================
-    // ZORA
+    // TECHMART
     // ================================================================
 
-    protected function searchZoraUrl(Product $product): ?string
-    {
-        $primary = $this->getPrimaryIdentifier($product);
-        $brand   = trim((string) $product->brand);
-
-        Log::info('Zora search start', [
-            'product_id' => $product->id,
-            'primary'    => $primary,
-            'brand'      => $brand,
-        ]);
-
-        $url = $this->searchZoraViaHtml($product);
-        if ($url) return $url;
-
-        $url = $this->searchZoraViaSearchEngine($product, 'google');
-        if ($url) return $url;
-
-        usleep(1500000);
-        $url = $this->searchZoraViaSearchEngine($product, 'bing');
-        if ($url) return $url;
-
-        return null;
-    }
-
-    protected function searchZoraViaHtml(Product $product): ?string
+    protected function searchTechmartUrl(Product $product): ?string
     {
         $bestUrl   = null;
         $bestScore = -999;
-        $firstUrl  = null;
 
-        foreach (array_slice($this->buildProgressiveQueries($product), 0, 12) as $query) {
-            foreach ([
-                'https://zora.bg/search?q=' . urlencode($query),
-                'https://zora.bg/catalogsearch/result/?q=' . urlencode($query),
-            ] as $searchUrl) {
+        // Techmart няма работеща търсачка — само direct slugs и Google
+        // ------------------------------------------------
+        // 1) DIRECT SLUG CANDIDATES
+        // ------------------------------------------------
+        foreach ($this->buildTechmartDirectCandidates($product) as $u) {
+            $pageHtml = $this->fetchHtml($u, 'https://techmart.bg/');
+            if (! $pageHtml) {
+                continue;
+            }
 
-                $html = $this->fetchZoraHtml($searchUrl);
+            [$ps, $why] = $this->computeMatchScore($u, $pageHtml, $product);
 
-                Log::info('Zora search page', [
+            Log::debug('Techmart direct candidate', [
+                'product_id' => $product->id,
+                'url'        => $u,
+                'score'      => $ps,
+                'why'        => $why,
+            ]);
+
+            if ($ps > $bestScore) {
+                $bestScore = $ps;
+                $bestUrl   = $u;
+            }
+
+            if ($ps >= self::SCORE_ACCEPT) {
+                Log::info('Techmart found via direct slug', [
                     'product_id' => $product->id,
-                    'query'      => $query,
-                    'url'        => $searchUrl,
-                    'got_html'   => $html !== null,
-                    'body_len'   => $html ? strlen($html) : 0,
+                    'url'        => $u,
+                    'score'      => $ps,
                 ]);
 
-                if (!$html) continue;
+                return $u;
+            }
+        }
 
-                $candidates = $this->extractZoraProductUrls($html);
+        // ------------------------------------------------
+        // 3) GOOGLE FALLBACK
+        // ------------------------------------------------
+        $googleUrl = $this->searchViaGoogle($product, 'techmart.bg');
+        if ($googleUrl) {
+            $pageHtml = $this->fetchHtml($googleUrl, 'https://techmart.bg/');
+            [$ps] = $this->computeMatchScore($googleUrl, (string) $pageHtml, $product);
 
-                Log::info('Zora search candidates', [
-                    'product_id' => $product->id,
-                    'query'      => $query,
-                    'count'      => count($candidates),
-                    'urls'       => array_slice($candidates, 0, 5),
-                ]);
+            Log::info('Techmart Google fallback candidate', [
+                'product_id' => $product->id,
+                'url'        => $googleUrl,
+                'score'      => $ps,
+            ]);
 
-                if (empty($candidates)) continue;
-
-                if ($firstUrl === null) {
-                    $firstUrl = $candidates[0];
-                }
-
-                foreach ($candidates as $u) {
-                    [$s, $why] = $this->computeMatchScore($u, '', $product);
-
-                    Log::debug('Zora url score', [
-                        'product_id' => $product->id,
-                        'url'        => $u,
-                        'score'      => $s,
-                        'why'        => $why,
-                    ]);
-
-                    if ($s > $bestScore) { $bestScore = $s; $bestUrl = $u; }
-
-                    if ($s >= self::SCORE_ACCEPT) {
-                        $pageHtml = $this->fetchZoraHtml($u);
-                        if ($pageHtml) {
-                            [$ps] = $this->computeMatchScore($u, $pageHtml, $product);
-                            if ($ps > $bestScore) { $bestScore = $ps; $bestUrl = $u; }
-                            if ($ps >= self::SCORE_ACCEPT) {
-                                Log::info('Zora found via search+page', ['product_id' => $product->id, 'url' => $u, 'score' => $ps]);
-                                return $u;
-                            }
-                        } else {
-                            Log::info('Zora found via search url-only', ['product_id' => $product->id, 'url' => $u, 'score' => $s]);
-                            return $u;
-                        }
-                    }
-                }
-
-                if ($firstUrl !== null && $bestScore < self::SCORE_ACCEPT) {
-                    $pageHtml = $this->fetchZoraHtml($firstUrl);
-                    if ($pageHtml) {
-                        [$ps, $why] = $this->computeMatchScore($firstUrl, $pageHtml, $product);
-                        Log::info('Zora first-result page score', [
-                            'product_id' => $product->id,
-                            'url'        => $firstUrl,
-                            'score'      => $ps,
-                            'why'        => $why,
-                        ]);
-                        if ($ps >= self::SCORE_FALLBACK) {
-                            Log::info('Zora found via first-result', ['product_id' => $product->id, 'url' => $firstUrl, 'score' => $ps]);
-                            return $firstUrl;
-                        }
-                    }
-                }
+            if ($ps >= self::SCORE_FALLBACK) {
+                return $googleUrl;
             }
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            Log::info('Zora fallback best via html', ['product_id' => $product->id, 'url' => $bestUrl, 'score' => $bestScore]);
+            Log::info('Techmart fallback', [
+                'product_id' => $product->id,
+                'url'        => $bestUrl,
+                'score'      => $bestScore,
+            ]);
+
             return $bestUrl;
         }
 
-        if ($firstUrl) {
-            $pageHtml = $this->fetchZoraHtml($firstUrl);
-            if ($pageHtml) {
-                [$ps] = $this->computeMatchScore($firstUrl, $pageHtml, $product);
-                if ($ps >= self::SCORE_FALLBACK) {
-                    Log::info('Zora last-resort first-result', ['product_id' => $product->id, 'url' => $firstUrl, 'score' => $ps]);
-                    return $firstUrl;
-                }
-            }
-        }
-
         return null;
     }
 
-    protected function searchZoraViaSearchEngine(Product $product, string $engine): ?string
+    // ----------------------------------------------------------------
+    // FIX #1: ЛИПСВАШЕ — sanitizeTechmartSearchTerm
+    // ----------------------------------------------------------------
+    protected function sanitizeTechmartSearchTerm(string $query): string
     {
-        $primary = $this->getPrimaryIdentifier($product);
-        $brand   = trim((string) $product->brand);
-        $name    = trim((string) $product->name);
+        $query = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $query);
+        $query = trim(preg_replace('/\s+/', ' ', (string) $query));
 
-        $queries = [];
-        if ($primary && $brand) $queries[] = "site:zora.bg $brand $primary";
-        if ($primary)           $queries[] = "site:zora.bg $primary";
-        if ($brand && $name)    $queries[] = "site:zora.bg $brand $name";
-
-        foreach (array_slice($queries, 0, 3) as $query) {
-            $url = $this->searchEngineQuery($query, $product, $engine);
-            if ($url) return $url;
-            usleep(2000000);
-        }
-
-        return null;
+        return $query;
     }
 
-    protected function searchEngineQuery(string $query, Product $product, string $engine): ?string
+    // ----------------------------------------------------------------
+    // FIX #2: ЛИПСВАШЕ — extractTechmartProductUrls
+    // ----------------------------------------------------------------
+    protected function extractTechmartProductUrls(string $html): array
     {
-        try {
-            if ($engine === 'google') {
-                $searchUrl = 'https://www.google.com/search?q=' . urlencode($query) . '&num=10&hl=bg&gl=bg';
-                $referer   = 'https://www.google.com/';
-            } else {
-                $searchUrl = 'https://www.bing.com/search?q=' . urlencode($query) . '&count=10&setlang=bg&cc=BG';
-                $referer   = 'https://www.bing.com/';
-            }
-
-            $resp = Http::timeout(25)->withHeaders([
-                'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-                'Accept-Language' => 'bg-BG,bg;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Referer'         => $referer,
-                'Cache-Control'   => 'no-cache',
-            ])->get($searchUrl);
-
-            $body = $resp->body();
-
-            Log::info("Zora $engine query", [
-                'product_id' => $product->id,
-                'query'      => $query,
-                'status'     => $resp->status(),
-                'body_len'   => strlen($body),
-            ]);
-
-            if (!$resp->successful() || strlen($body) < 500) return null;
-
-            $raw = [];
-
-            preg_match_all('/https?:\/\/(?:www\.)?zora\.bg\/product\/[^"\'&\s<>\\\]+/i', $body, $m1);
-            $raw = array_merge($raw, $m1[0] ?? []);
-
-            preg_match_all('/href=["\']([^"\']*zora\.bg\/product\/[^"\']+)["\']/i', $body, $m2);
-            $raw = array_merge($raw, $m2[1] ?? []);
-
-            preg_match_all('/\/url\?[^"\']*q=(https?:\/\/(?:www\.)?zora\.bg\/product\/[^&"\'<>\s]+)/i', $body, $m3);
-            $raw = array_merge($raw, $m3[1] ?? []);
-
-            preg_match_all('/https?%3A%2F%2F(?:www\.)?zora\.bg%2Fproduct%2F([^&"\'<>\s%]+)/i', $body, $m4);
-            foreach (($m4[0] ?? []) as $encoded) { $raw[] = urldecode($encoded); }
-
-            preg_match_all('/data-(?:href|url)=["\']([^"\']*zora\.bg\/product\/[^"\']+)["\']/i', $body, $m5);
-            $raw = array_merge($raw, $m5[1] ?? []);
-
-            preg_match_all('/"(https?:\/\/(?:www\.)?zora\.bg\/product\/[^"\\\\]+)"/i', $body, $m6);
-            $raw = array_merge($raw, $m6[1] ?? []);
-
-            preg_match_all('/<cite[^>]*>([^<]*zora\.bg\/product\/[^<]+)<\/cite>/i', $body, $m7);
-            foreach (($m7[1] ?? []) as $cite) {
-                $cite = strip_tags($cite);
-                if (!Str::startsWith($cite, 'http')) $cite = 'https://' . $cite;
-                $raw[] = $cite;
-            }
-
-            $candidates = array_values(array_unique(array_map(
-                fn ($u) => $this->cleanUrl(html_entity_decode(urldecode(trim((string) $u)), ENT_QUOTES, 'UTF-8')),
-                $raw
-            )));
-
-            $candidates = array_values(array_filter(
-                $candidates,
-                fn ($u) => (bool) preg_match('#https?://(?:www\.)?zora\.bg/product/[^/?#\s]+$#i', $u)
-            ));
-
-            Log::info("Zora $engine candidates", [
-                'product_id' => $product->id,
-                'query'      => $query,
-                'count'      => count($candidates),
-                'urls'       => array_slice($candidates, 0, 5),
-            ]);
-
-            if (empty($candidates)) return null;
-
-            $bestUrl = null; $bestScore = -999;
-
-            foreach ($candidates as $u) {
-                [$s, $why] = $this->computeMatchScore($u, '', $product);
-                Log::debug("Zora $engine url score", ['product_id' => $product->id, 'url' => $u, 'score' => $s, 'why' => $why]);
-                if ($s > $bestScore) { $bestScore = $s; $bestUrl = $u; }
-                if ($s >= self::SCORE_ACCEPT) {
-                    Log::info("Zora found via $engine", ['product_id' => $product->id, 'url' => $u, 'score' => $s]);
-                    return $u;
-                }
-            }
-
-            if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-                Log::info("Zora fallback via $engine", ['product_id' => $product->id, 'url' => $bestUrl, 'score' => $bestScore]);
-                return $bestUrl;
-            }
-
-        } catch (\Throwable $e) {
-            Log::warning("Zora $engine exception", [
-                'product_id' => $product->id,
-                'query'      => $query,
-                'message'    => $e->getMessage(),
-            ]);
-        }
-
-        return null;
-    }
-
-    protected function extractZoraProductUrls(string $html): array
-    {
-        $urls = []; $seen = [];
-        $hardBlock = ['/cart', '/wishlist', '/account', '/checkout'];
+        $urls      = [];
+        $seen      = [];
+        $hardBlock = [
+            '/cart', '/wishlist', '/account', '/checkout',
+            '/wp-login', '/?s=', '/tag/', '/page/', '/wp-admin',
+        ];
+        $imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.pdf'];
 
         preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m1);
-        preg_match_all('/(?:https?:\/\/)?(?:www\.)?zora\.bg\/product\/([^"\'&\s<>\\\\\/][^"\'&\s<>\\\\]*)/i', $html, $m2);
+        preg_match_all('/"permalink"\s*:\s*"([^"]+)"/i', $html, $m2);
+        preg_match_all('/"url"\s*:\s*"([^"]+)"/i',       $html, $m3);
 
-        $hrefs = $m1[1] ?? [];
+        foreach (array_merge($m1[1] ?? [], $m2[1] ?? [], $m3[1] ?? []) as $href) {
+            $href = str_replace('\/', '/', (string) $href);
+            $href = html_entity_decode(trim($href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        foreach (($m2[0] ?? []) as $raw) {
-            $raw = trim((string) $raw);
-            if (!Str::startsWith($raw, 'http')) {
-                $raw = 'https://' . ltrim($raw, '/');
+            if ($href === '') {
+                continue;
             }
-            $hrefs[] = $raw;
-        }
 
-        foreach ($hrefs as $href) {
-            $href = html_entity_decode(trim((string) $href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            if ($href === '') continue;
+            if (! Str::contains($href, 'techmart.bg') && ! Str::startsWith($href, '/')) {
+                continue;
+            }
 
-            $isZora     = Str::contains($href, 'zora.bg');
-            $isProduct  = Str::contains($href, '/product/');
-            $isRelative = Str::startsWith($href, '/product/') || Str::startsWith($href, 'product/');
-
-            if (!$isZora && !$isRelative) continue;
-            if (!$isProduct) continue;
-
-            $abs  = $this->cleanUrl($this->makeAbsoluteUrl($href, 'https://zora.bg'));
+            $abs  = $this->cleanUrl($this->makeAbsoluteUrl($href, 'https://techmart.bg'));
             $path = parse_url($abs, PHP_URL_PATH) ?? '';
-            if ($path === '' || $path === '/') continue;
 
-            $host = parse_url($abs, PHP_URL_HOST) ?? '';
-            if (!Str::contains($host, 'zora.bg')) continue;
+            if ($path === '' || $path === '/') {
+                continue;
+            }
 
             $skip = false;
-            foreach ($hardBlock as $b) {
-                if (Str::contains($abs, $b)) { $skip = true; break; }
-            }
-            if ($skip) continue;
 
-            if (!isset($seen[$abs])) { $seen[$abs] = true; $urls[] = $abs; }
+            foreach ($hardBlock as $b) {
+                if (Str::contains($abs, $b)) {
+                    $skip = true;
+                    break;
+                }
+            }
+
+            foreach ($imageExts as $e) {
+                if (Str::endsWith(mb_strtolower($abs), $e)) {
+                    $skip = true;
+                    break;
+                }
+            }
+
+            if ($skip) {
+                continue;
+            }
+
+            $slug = trim(basename($path), '/');
+            if ($slug === '' || substr_count($slug, '-') < 1) {
+                continue;
+            }
+
+            if (! isset($seen[$abs])) {
+                $seen[$abs] = true;
+                $urls[]     = $abs;
+            }
         }
 
         return $urls;
+    }
+
+    protected function buildTechmartDirectCandidates(Product $product): array
+    {
+        $urls = [];
+        $seen = [];
+
+        $add = function (string $slug) use (&$urls, &$seen) {
+            $slug = trim($slug, " \t\n\r\0\x0B-/");
+            if ($slug === '' || isset($seen[$slug])) {
+                return;
+            }
+            $seen[$slug] = true;
+            $urls[] = 'https://techmart.bg/' . $slug;
+        };
+
+        $brand   = trim((string) $product->brand);
+        $name    = trim((string) $product->name);
+        $sku     = trim((string) ($product->sku ?? ''));
+        $primary = trim((string) ($this->getPrimaryIdentifier($product) ?? ''));
+
+        $nameSlugBul = $this->techmartSlugifyBulgarian($name);
+        $brandSlug   = $this->techmartSlugifyBulgarian($brand);
+        $tokens      = array_values(array_filter(explode('-', $nameSlugBul)));
+
+        $skuVariants = array_values(array_unique(array_filter([
+            $this->techmartSlugifyBulgarian($sku),
+            $this->techmartSlugifyBulgarian(str_replace(['/', '.', '-', ' '], '', $sku)),
+            $this->techmartSlugifyBulgarian(str_replace('/', '', $sku)),
+            $this->techmartSlugifyBulgarian(str_replace('.', '', $sku)),
+            $this->techmartSlugifyBulgarian($primary),
+            $this->techmartSlugifyBulgarian(str_replace(['/', '.', '-', ' '], '', $primary)),
+            $this->techmartSlugifyBulgarian(str_replace('/', '', $primary)),
+        ])));
+
+        $prefixes = [
+            'furna-za-vgrazhdane', 'furna',
+            'mikrovylnova-furna', 'mikrovylnova',
+            'plot-za-vgrazhdane', 'plot',
+            'induktsen-plot', 'elektricheski-plot',
+            'sydomiqlna-za-vgrazhdane', 'sydomiqlna-45sm',
+            'sydomiqlna-60sm', 'sydomiqlna',
+            'peralnya', 'sushilnq', 'peralnya-sushilnq',
+            'hladilnik', 'hladilnik-s-frizer',
+            'frizer', 'vgrazhdan-hladilnik',
+            'multikukyr', 'multikuker', 'multikukar', 'multicooker',
+            'kafeavtomat', 'kafe-avtomat',
+            'espreso-mashina', 'kapkova-kafemashina',
+            'klimatik', 'invertoren-klimatik',
+            'televizor', 'smart-televizor', 'oled-televizor', 'qled-televizor',
+            'prakhosmukachka', 'robotizirana-prakhosmukachka',
+            'boyler', 'termopot',
+            'air-fryer', 'friturnik',
+            'epilator', 'seshhoar', 'shteker',
+            'mikser', 'blender', 'kuhnenski-robot',
+            'toster', 'skara', 'uред',
+            'monitor', 'printer', 'skaner',
+        ];
+
+        foreach ($prefixes as $prefix) {
+            foreach ($skuVariants as $skuV) {
+                if ($skuV === '') continue;
+                if ($brandSlug) {
+                    $add($prefix . '-' . $brandSlug . '-' . $skuV);
+                }
+                $add($prefix . '-' . $skuV);
+            }
+        }
+
+        for ($n = min(8, count($tokens)); $n >= 3; $n--) {
+            $add(implode('-', array_slice($tokens, 0, $n)));
+        }
+
+        foreach ($skuVariants as $skuV) {
+            if ($skuV === '') continue;
+            if ($brandSlug) {
+                $add($brandSlug . '-' . $skuV);
+            }
+            $add($skuV);
+        }
+
+        $nameTokens = array_values(array_filter(
+            $tokens,
+            fn ($t) => strlen($t) >= 3 && ! in_array($t, ['za', 'i', 'na', 'se', 'ot', 'do', 'pri', 'sus', 'vgrazhdane'])
+        ));
+
+        foreach ($prefixes as $prefix) {
+            foreach ($skuVariants as $skuV) {
+                if ($skuV === '') continue;
+                foreach ($nameTokens as $token) {
+                    if ($token === $skuV || $token === $brandSlug) continue;
+                    if ($brandSlug) {
+                        $add($prefix . '-' . $brandSlug . '-' . $skuV . '-' . $token);
+                    }
+                }
+            }
+        }
+
+        return $urls;
+    }
+
+    protected function techmartSlugifyBulgarian(string $value): string
+    {
+        $value = mb_strtolower(trim($value), 'UTF-8');
+
+        $map = [
+            'а' => 'a',  'б' => 'b',  'в' => 'v',  'г' => 'g',
+            'д' => 'd',  'е' => 'e',  'ж' => 'zh', 'з' => 'z',
+            'и' => 'i',  'й' => 'y',  'к' => 'k',  'л' => 'l',
+            'м' => 'm',  'н' => 'n',  'о' => 'o',  'п' => 'p',
+            'р' => 'r',  'с' => 's',  'т' => 't',  'у' => 'u',
+            'ф' => 'f',  'х' => 'h',  'ц' => 'ts', 'ч' => 'ch',
+            'ш' => 'sh', 'щ' => 'sht','ъ' => 'y',  'ь' => '',
+            'ю' => 'yu', 'я' => 'q',
+        ];
+
+        $value = strtr($value, $map);
+        $value = Str::ascii($value);
+
+        $value = str_replace('/', '', $value);
+
+        $value = preg_replace('/[^a-z0-9]+/i', '-', $value);
+        $value = preg_replace('/-+/', '-', (string) $value);
+
+        return trim((string) $value, '-');
+    }
+
+    // ================================================================
+    // TEHNOMIX
+    // ================================================================
+
+    protected function searchTehnomixUrl(Product $product): ?string
+    {
+        $bestUrl   = null;
+        $bestScore = -999;
+
+        $primary = $this->getPrimaryIdentifier($product);
+        $sku     = trim((string) ($product->sku ?? ''));
+
+        $extraQueries = [];
+        foreach ([$primary, $sku] as $id) {
+            if (! $id) continue;
+            $flat = preg_replace('/[^A-Z0-9]/', '', $this->normalizeIdentifier($id));
+            for ($len = min(strlen($flat), 7); $len >= 4; $len--) {
+                $extraQueries[] = trim((string) $product->brand) . ' ' . substr($flat, 0, $len);
+                $extraQueries[] = substr($flat, 0, $len);
+            }
+        }
+
+        $queries = array_values(array_unique(array_merge(
+            array_slice($this->buildProgressiveQueries($product), 0, 12),
+            $extraQueries
+        )));
+
+        foreach ($queries as $query) {
+            $html = $this->fetchHtml(
+                'https://www.tehnomix.bg/catalogsearch/result/?q=' . urlencode($query),
+                'https://www.tehnomix.bg/'
+            );
+
+            if (! $html) {
+                continue;
+            }
+
+            foreach ($this->extractTehnomixProductUrls($html) as $u) {
+                [$s] = $this->computeMatchScore($u, '', $product);
+
+                if ($s > $bestScore) {
+                    $bestScore = $s;
+                    $bestUrl   = $u;
+                }
+
+                if ($s >= self::SCORE_URL_HINT) {
+                    $pageHtml = $this->fetchHtml($u, 'https://www.tehnomix.bg/');
+                    if (! $pageHtml) {
+                        continue;
+                    }
+
+                    [$ps, $why] = $this->computeMatchScore($u, $pageHtml, $product);
+
+                    if ($primary || $sku) {
+                        $identifier = $primary ?: $sku;
+                        $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($u, PHP_URL_PATH) ?? '')));
+                        $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                        $foundMatch = false;
+                        if ($idFlat !== '') {
+                            if (str_contains($uSlug, $idFlat)) {
+                                $foundMatch = true;
+                            }
+                            if (! $foundMatch) {
+                                for ($len = min(strlen($idFlat) - 1, 8); $len >= 4; $len--) {
+                                    $prefix = substr($idFlat, 0, $len);
+                                    $pos    = strpos($uSlug, $prefix);
+                                    if ($pos !== false) {
+                                        $after = $pos + $len;
+                                        if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                            $foundMatch = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (! $foundMatch) {
+                            Log::debug('Tehnomix skip wrong model', [
+                                'product_id' => $product->id,
+                                'url'        => $u,
+                                'expected'   => $idFlat,
+                            ]);
+                            continue;
+                        }
+                    }
+
+                    Log::debug('Tehnomix candidate', [
+                        'product_id' => $product->id,
+                        'url'        => $u,
+                        'score'      => $ps,
+                        'why'        => $why,
+                    ]);
+
+                    if ($ps > $bestScore) {
+                        $bestScore = $ps;
+                        $bestUrl   = $u;
+                    }
+
+                    if ($ps >= self::SCORE_ACCEPT) {
+                        Log::info('Tehnomix found', [
+                            'product_id' => $product->id,
+                            'url'        => $u,
+                            'score'      => $ps,
+                        ]);
+
+                        return $u;
+                    }
+                }
+            }
+        }
+
+        $googleUrl = $this->searchViaGoogle($product, 'tehnomix.bg');
+        if ($googleUrl) {
+            Log::info('Tehnomix found via Google', [
+                'product_id' => $product->id,
+                'url'        => $googleUrl,
+            ]);
+
+            return $googleUrl;
+        }
+
+        if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
+            if ($primary || $sku) {
+                $identifier = $primary ?: $sku;
+                $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($bestUrl, PHP_URL_PATH) ?? '')));
+                $idFlat     = preg_replace('/[^a-z0-9]/', '', mb_strtolower($identifier));
+
+                $foundMatch = false;
+                if ($idFlat !== '') {
+                    if (str_contains($uSlug, $idFlat)) {
+                        $foundMatch = true;
+                    }
+                    if (! $foundMatch) {
+                        for ($len = min(strlen($idFlat) - 1, 8); $len >= 4; $len--) {
+                            $prefix = substr($idFlat, 0, $len);
+                            $pos    = strpos($uSlug, $prefix);
+                            if ($pos !== false) {
+                                $after = $pos + $len;
+                                if ($after >= strlen($uSlug) || ! ctype_alnum($uSlug[$after])) {
+                                    $foundMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (! $foundMatch) {
+                    Log::info('Tehnomix fallback rejected wrong model', [
+                        'product_id' => $product->id,
+                        'url'        => $bestUrl,
+                        'expected'   => $idFlat,
+                    ]);
+                    return null;
+                }
+            }
+
+            Log::info('Tehnomix fallback', [
+                'product_id' => $product->id,
+                'url'        => $bestUrl,
+                'score'      => $bestScore,
+            ]);
+
+            return $bestUrl;
+        }
+
+        return null;
+    }
+
+    protected function extractTehnomixProductUrls(string $html): array
+    {
+        $urls = [];
+        $seen = [];
+
+        preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m1);
+        preg_match_all('/"url"\s*:\s*"([^"]+)"/i', $html, $m2);
+        preg_match_all('/data-product-url=["\']([^"\']+)["\']/i', $html, $m3);
+
+        foreach (array_merge($m1[1] ?? [], $m2[1] ?? [], $m3[1] ?? []) as $href) {
+            $href = str_replace('\/', '/', (string) $href);
+            $href = html_entity_decode(trim($href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+            if ($href === '') {
+                continue;
+            }
+
+            if (! Str::contains($href, 'tehnomix.bg') && ! Str::startsWith($href, '/')) {
+                continue;
+            }
+
+            $abs  = $this->cleanUrl($this->makeAbsoluteUrl($href, 'https://www.tehnomix.bg'));
+            $path = parse_url($abs, PHP_URL_PATH) ?? '';
+
+            if ($path === '' || $path === '/') {
+                continue;
+            }
+
+            $bad = [
+                '/catalogsearch', '/checkout', '/customer', '/wishlist',
+                '/cart', '/brand', '/brands', '/blog', '/sales',
+                '/promotions', '/contacts',
+            ];
+
+            $skip = false;
+            foreach ($bad as $b) {
+                if (Str::contains(mb_strtolower($path), mb_strtolower($b))) {
+                    $skip = true;
+                    break;
+                }
+            }
+
+            if ($skip) {
+                continue;
+            }
+
+            $slug = trim((string) basename($path), '/');
+            if ($slug === '') {
+                continue;
+            }
+            if (substr_count($slug, '-') < 2) {
+                continue;
+            }
+            if (! preg_match('/\d/', $slug)) {
+                continue;
+            }
+
+            if (! isset($seen[$abs])) {
+                $seen[$abs] = true;
+                $urls[] = $abs;
+            }
+        }
+
+        return $urls;
+    }
+
+    // ================================================================
+    // GOOGLE FALLBACK
+    // ================================================================
+
+    protected function searchViaGoogle(Product $product, string $site): ?string
+    {
+        $bestUrl   = null;
+        $bestScore = -999;
+
+        foreach (array_slice($this->buildProgressiveQueries($product), 0, 8) as $queryTerm) {
+            $query = $queryTerm . ' site:' . $site;
+
+            try {
+                $html = $this->fetchHtml(
+                    'https://www.google.com/search?q=' . urlencode($query),
+                    'https://www.google.com/'
+                );
+
+                if (! $html) {
+                    continue;
+                }
+
+                $candidates = $this->extractGoogleResultUrls($html, $site);
+
+                foreach ($candidates as $u) {
+                    [$s] = $this->computeMatchScore($u, '', $product);
+
+                    if ($s > $bestScore) {
+                        $bestScore = $s;
+                        $bestUrl   = $u;
+                    }
+
+                    if ($s >= self::SCORE_URL_HINT) {
+                        $pageHtml = $this->fetchHtml($u, 'https://www.google.com/');
+                        [$ps] = $this->computeMatchScore($u, (string) $pageHtml, $product);
+
+                        if ($ps > $bestScore) {
+                            $bestScore = $ps;
+                            $bestUrl   = $u;
+                        }
+
+                        if ($ps >= self::SCORE_ACCEPT) {
+                            return $u;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
+            return $bestUrl;
+        }
+
+        return null;
+    }
+
+    protected function extractGoogleResultUrls(string $html, string $site): array
+    {
+        $urls = [];
+        $seen = [];
+
+        preg_match_all('/\/url\?q=([^"&]+)&/i', $html, $m1);
+        foreach (($m1[1] ?? []) as $encodedUrl) {
+            $decoded = urldecode(html_entity_decode((string) $encodedUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            $u = $this->cleanUrl($decoded);
+            if (Str::contains($u, $site) && ! $this->isBadSearchResultUrl($u) && ! isset($seen[$u])) {
+                $seen[$u] = true;
+                $urls[] = $u;
+            }
+        }
+
+        preg_match_all('/https?:\/\/[^"\s<]+/i', $html, $m2);
+        foreach (($m2[0] ?? []) as $rawUrl) {
+            $u = $this->cleanUrl(html_entity_decode((string) $rawUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if (Str::contains($u, $site) && ! $this->isBadSearchResultUrl($u) && ! isset($seen[$u])) {
+                $seen[$u] = true;
+                $urls[] = $u;
+            }
+        }
+
+        return $urls;
+    }
+
+    protected function isBadSearchResultUrl(string $url): bool
+    {
+        $url = mb_strtolower($url);
+
+        $blocked = [
+            'google.com', '/search', '/catalogsearch', '/category', '/categories',
+            '/brand', '/brands', '/cart', '/checkout', '/customer', '/account',
+            '/wishlist', '/blog', '/news', '/contact', '/promo', '/promotions',
+        ];
+
+        foreach ($blocked as $part) {
+            if (str_contains($url, $part)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ================================================================
@@ -587,7 +1177,8 @@ class AutoProductSearchService
 
     protected function computeMatchScore(string $url, string $html, Product $product): array
     {
-        $score = 0; $why = [];
+        $score = 0;
+        $why   = [];
 
         $primary = $this->getPrimaryIdentifier($product);
         $sku     = trim((string) ($product->sku ?? ''));
@@ -595,43 +1186,63 @@ class AutoProductSearchService
         $brand   = mb_strtolower(Str::ascii((string) $product->brand));
         $name    = mb_strtolower(Str::ascii((string) $product->name));
 
-        // ── 1. URL score ──────────────────────────────────────────────
         $uNorm = mb_strtolower(Str::ascii($url));
         $uFlat = preg_replace('/[^a-z0-9]/', '', $uNorm);
 
         $primaryFoundInUrl = $primary && $this->containsExactIdentifier($uNorm, $primary);
-        $skuFoundInUrl     = $sku     && $this->containsExactIdentifier($uNorm, $sku);
+        $skuFoundInUrl     = $sku && $this->containsExactIdentifier($uNorm, $sku);
         $eanFoundInUrl     = strlen($ean) >= 8 && str_contains($uFlat, $ean);
 
-        if ($primaryFoundInUrl) { $score += 55; $why[] = 'url_primary'; }
-        if ($skuFoundInUrl)     { $score += 40; $why[] = 'url_sku'; }
-        if ($eanFoundInUrl)     { $score += 35; $why[] = 'url_ean'; }
+        if ($primaryFoundInUrl) {
+            $score += 55;
+            $why[] = 'url_primary';
+        }
+        if ($skuFoundInUrl) {
+            $score += 40;
+            $why[] = 'url_sku';
+        }
+        if ($eanFoundInUrl) {
+            $score += 35;
+            $why[] = 'url_ean';
+        }
 
-        // Fuzzy prefix match в URL (напр. FTXA20CW → ftxa20c в URL)
-        if (!$primaryFoundInUrl && !$skuFoundInUrl && $primary) {
+        if (! $primaryFoundInUrl && ! $skuFoundInUrl && $primary) {
             $pFlat = preg_replace('/[^a-z0-9]/', '', mb_strtolower(Str::ascii($primary)));
             for ($len = min(strlen($pFlat), 8); $len >= 6; $len--) {
                 if (str_contains($uFlat, substr($pFlat, 0, $len))) {
-                    $score += 30; $why[] = 'url_fuzzy:' . substr($pFlat, 0, $len); break;
+                    $score += 30;
+                    $why[] = 'url_fuzzy:' . substr($pFlat, 0, $len);
+                    break;
                 }
             }
         }
 
         foreach (array_filter(preg_split('/\s+/u', "$brand $name"), fn ($t) => strlen($t) >= 3) as $t) {
-            if (str_contains($uNorm, $t)) { $score += 5; $why[] = 'url_token:' . $t; }
-        }
-
-        if (!$primaryFoundInUrl && !$skuFoundInUrl && !$eanFoundInUrl) {
-            foreach (['bundle', 'komplekt', 'set-', 'paket-', 'filter', 'aksesoar'] as $b) {
-                if (str_contains($uNorm, $b)) { $score -= 18; $why[] = 'url_penalty:' . $b; }
+            if (str_contains($uNorm, $t)) {
+                $score += 5;
+                $why[] = 'url_token:' . $t;
             }
         }
 
-        // ── 2. Page content score ─────────────────────────────────────
+        if (! $primaryFoundInUrl && ! $skuFoundInUrl && ! $eanFoundInUrl) {
+            foreach (['bundle', 'komplekt', 'set-', 'paket-', 'filter', 'aksesoar'] as $b) {
+                if (str_contains($uNorm, $b)) {
+                    $score -= 18;
+                    $why[] = 'url_penalty:' . $b;
+                }
+            }
+        }
+
         if ($html !== '') {
-            $title = ''; $h1 = '';
-            if (preg_match('/<title[^>]*>(.*?)<\/title>/si', $html, $m)) $title = strip_tags($m[1]);
-            if (preg_match('/<h1[^>]*>(.*?)<\/h1>/si', $html, $m))       $h1    = strip_tags($m[1]);
+            $title = '';
+            $h1    = '';
+
+            if (preg_match('/<title[^>]*>(.*?)<\/title>/si', $html, $m)) {
+                $title = strip_tags($m[1]);
+            }
+            if (preg_match('/<h1[^>]*>(.*?)<\/h1>/si', $html, $m)) {
+                $h1 = strip_tags($m[1]);
+            }
 
             $prio     = mb_strtolower(Str::ascii("$title $h1 $url"));
             $prioFlat = preg_replace('/[^a-z0-9]/', '', $prio);
@@ -644,38 +1255,79 @@ class AutoProductSearchService
             );
 
             if ($primary) {
-                if ($this->containsExactIdentifier($prio, $primary))         { $score += 50; $why[] = 'title_primary'; }
-                elseif ($this->containsExactIdentifier($bodyText, $primary)) { $score += 30; $why[] = 'body_primary'; }
+                if ($this->containsExactIdentifier($prio, $primary)) {
+                    $score += 50;
+                    $why[] = 'title_primary';
+                } elseif ($this->containsExactIdentifier($bodyText, $primary)) {
+                    $score += 30;
+                    $why[] = 'body_primary';
+                }
             }
+
             if ($sku) {
-                if ($this->containsExactIdentifier($prio, $sku))             { $score += 35; $why[] = 'title_sku'; }
-                elseif ($this->containsExactIdentifier($bodyText, $sku))     { $score += 20; $why[] = 'body_sku'; }
+                if ($this->containsExactIdentifier($prio, $sku)) {
+                    $score += 35;
+                    $why[] = 'title_sku';
+                } elseif ($this->containsExactIdentifier($bodyText, $sku)) {
+                    $score += 20;
+                    $why[] = 'body_sku';
+                }
             }
+
             if (strlen($ean) >= 8) {
-                if (str_contains($prioFlat, $ean))                           { $score += 30; $why[] = 'title_ean'; }
-                elseif (str_contains($bodyFlat, $ean))                       { $score += 18; $why[] = 'body_ean'; }
+                if (str_contains($prioFlat, $ean)) {
+                    $score += 30;
+                    $why[] = 'title_ean';
+                } elseif (str_contains($bodyFlat, $ean)) {
+                    $score += 18;
+                    $why[] = 'body_ean';
+                }
             }
 
             foreach ($this->extractStructuredIds($html) as $sid) {
-                if ($primary && $this->containsExactIdentifier($sid, $primary)) { $score += 35; $why[] = 'jsonld_primary'; break; }
-                if ($sku     && $this->containsExactIdentifier($sid, $sku))     { $score += 25; $why[] = 'jsonld_sku';     break; }
-                if (strlen($ean) >= 8 && str_contains(preg_replace('/\D/', '', mb_strtolower($sid)), $ean)) { $score += 20; $why[] = 'jsonld_ean'; break; }
+                if ($primary && $this->containsExactIdentifier($sid, $primary)) {
+                    $score += 35;
+                    $why[] = 'jsonld_primary';
+                    break;
+                }
+                if ($sku && $this->containsExactIdentifier($sid, $sku)) {
+                    $score += 25;
+                    $why[] = 'jsonld_sku';
+                    break;
+                }
+                if (strlen($ean) >= 8 && str_contains(preg_replace('/\D/', '', mb_strtolower($sid)), $ean)) {
+                    $score += 20;
+                    $why[] = 'jsonld_ean';
+                    break;
+                }
             }
 
-            $tokens = array_values(array_filter(preg_split('/\s+/u', "$brand $name"), fn ($t) => strlen(trim($t)) >= 3));
-            $hitsPrio = 0; $hitsBody = 0;
+            $tokens   = array_values(array_filter(preg_split('/\s+/u', "$brand $name"), fn ($t) => strlen(trim($t)) >= 3));
+            $hitsPrio = 0;
+            $hitsBody = 0;
+
             foreach ($tokens as $t) {
-                if (str_contains($prio, $t))     $hitsPrio++;
-                if (str_contains($bodyText, $t)) $hitsBody++;
+                if (str_contains($prio, $t)) {
+                    $hitsPrio++;
+                }
+                if (str_contains($bodyText, $t)) {
+                    $hitsBody++;
+                }
             }
-            $score += min(40, $hitsPrio * 10 + $hitsBody * 3);
-            if ($hitsPrio >= 2) $why[] = "title_tokens:{$hitsPrio}";
-            if ($hitsBody >= 3) $why[] = "body_tokens:{$hitsBody}";
 
-            if (!$primaryFoundInPage) {
+            $score += min(40, $hitsPrio * 10 + $hitsBody * 3);
+            if ($hitsPrio >= 2) {
+                $why[] = "title_tokens:{$hitsPrio}";
+            }
+            if ($hitsBody >= 3) {
+                $why[] = "body_tokens:{$hitsBody}";
+            }
+
+            if (! $primaryFoundInPage) {
                 foreach (['аксесоар', 'консуматив', 'hepa', 'bundle'] as $b) {
                     if (str_contains($bodyText, mb_strtolower(Str::ascii($b)))) {
-                        $score -= 12; $why[] = 'page_penalty:' . $b;
+                        $score -= 12;
+                        $why[] = 'page_penalty:' . $b;
                     }
                 }
             }
@@ -687,31 +1339,53 @@ class AutoProductSearchService
     protected function extractStructuredIds(string $html): array
     {
         $out = [];
+
         preg_match_all('/<script[^>]+type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $m);
+
         foreach (($m[1] ?? []) as $json) {
             $data = json_decode(html_entity_decode(trim((string) $json), ENT_QUOTES, 'UTF-8'), true);
-            if (!is_array($data)) continue;
+            if (! is_array($data)) {
+                continue;
+            }
+
             $flat = $this->flattenArray($data);
+
             foreach (['sku', 'mpn', 'gtin', 'gtin13', 'gtin12', 'productID'] as $k) {
                 foreach ((array) ($flat[$k] ?? []) as $v) {
-                    $v = trim((string) $v); if ($v !== '') $out[] = $v;
+                    $v = trim((string) $v);
+                    if ($v !== '') {
+                        $out[] = $v;
+                    }
                 }
             }
         }
+
         foreach (['sku', 'mpn', 'gtin', 'ean'] as $k) {
             preg_match_all('/"' . $k . '"\s*:\s*"([^"]+)"/i', $html, $mx);
-            foreach (($mx[1] ?? []) as $v) { $v = trim((string) $v); if ($v !== '') $out[] = $v; }
+            foreach (($mx[1] ?? []) as $v) {
+                $v = trim((string) $v);
+                if ($v !== '') {
+                    $out[] = $v;
+                }
+            }
         }
+
         return array_values(array_unique($out));
     }
 
     protected function flattenArray(array $arr): array
     {
-        $res = [];
+        $res  = [];
         $walk = function ($node) use (&$res, &$walk) {
-            if (!is_array($node)) return;
+            if (! is_array($node)) {
+                return;
+            }
             foreach ($node as $k => $v) {
-                if (is_array($v)) $walk($v); else $res[$k][] = $v;
+                if (is_array($v)) {
+                    $walk($v);
+                } else {
+                    $res[$k][] = $v;
+                }
             }
         };
         $walk($arr);
@@ -724,12 +1398,14 @@ class AutoProductSearchService
 
     protected function buildProgressiveQueries(Product $product): array
     {
-        $queries = []; $seen = [];
+        $queries = [];
+        $seen    = [];
 
         $add = function (string $v) use (&$queries, &$seen) {
             $v = trim(preg_replace('/\s+/', ' ', $v));
-            if ($v !== '' && $v !== '-' && !isset($seen[$v])) {
-                $seen[$v] = true; $queries[] = $v;
+            if ($v !== '' && $v !== '-' && ! isset($seen[$v])) {
+                $seen[$v] = true;
+                $queries[] = $v;
             }
         };
 
@@ -739,35 +1415,50 @@ class AutoProductSearchService
         $ean     = trim((string) ($product->ean ?? ''));
         $primary = $this->getPrimaryIdentifier($product);
 
-        // Ако model съдържа "/" — добави и двете части
         $rawModel   = trim((string) ($product->model ?? ''));
         $modelParts = [];
         if (str_contains($rawModel, '/')) {
             $modelParts = array_values(array_filter(array_map('trim', explode('/', $rawModel))));
         }
 
-        if ($brand && $primary) $add("$brand $primary");
-        if ($primary)           $add($primary);
+        if ($brand && $primary) {
+            $add("$brand $primary");
+        }
+        if ($primary) {
+            $add($primary);
+        }
 
         foreach ($modelParts as $part) {
             $p = $this->normalizeIdentifier($part);
-            if ($brand) $add("$brand $p");
+            if ($brand) {
+                $add("$brand $p");
+            }
             $add($p);
         }
 
         foreach ($this->identifierVariants((string) $primary) as $v) {
-            if ($brand) $add("$brand $v"); $add($v);
+            if ($brand) {
+                $add("$brand $v");
+            }
+            $add($v);
         }
 
         if ($sku) {
-            if ($brand) $add("$brand $sku");
+            if ($brand) {
+                $add("$brand $sku");
+            }
             $add($sku);
             foreach ($this->identifierVariants($sku) as $v) {
-                if ($brand) $add("$brand $v"); $add($v);
+                if ($brand) {
+                    $add("$brand $v");
+                }
+                $add($v);
             }
         }
 
-        if ($ean && $ean !== '-') $add($ean);
+        if ($ean && $ean !== '-') {
+            $add($ean);
+        }
 
         if ($brand && $name) {
             $parts = array_values(array_filter(preg_split('/\s+/u', $name), fn ($w) => mb_strlen($w) >= 2));
@@ -776,11 +1467,18 @@ class AutoProductSearchService
         }
 
         foreach ($this->prefixFragments((string) $primary) as $f) {
-            if ($brand) $add("$brand $f"); $add($f);
+            if ($brand) {
+                $add("$brand $f");
+            }
+            $add($f);
         }
 
-        if ($name)           $add($name);
-        if ($brand && $name) $add("$brand $name");
+        if ($name) {
+            $add($name);
+        }
+        if ($brand && $name) {
+            $add("$brand $name");
+        }
 
         return $queries;
     }
@@ -788,10 +1486,19 @@ class AutoProductSearchService
     protected function prefixFragments(string $value): array
     {
         $v = preg_replace('/[^A-Z0-9]/', '', $this->normalizeIdentifier($value));
-        if ($v === '') return [];
+        if ($v === '') {
+            return [];
+        }
+
         $out = [];
-        for ($i = min(10, strlen($v)); $i >= 4; $i--) $out[] = substr($v, 0, $i);
-        if (strlen($v) >= 8) { $out[] = substr($v, 1, 6); $out[] = substr($v, -6); }
+        for ($i = min(10, strlen($v)); $i >= 4; $i--) {
+            $out[] = substr($v, 0, $i);
+        }
+        if (strlen($v) >= 8) {
+            $out[] = substr($v, 1, 6);
+            $out[] = substr($v, -6);
+        }
+
         return array_values(array_unique($out));
     }
 
@@ -802,10 +1509,14 @@ class AutoProductSearchService
     protected function getPrimaryIdentifier(Product $product): ?string
     {
         $model = trim((string) ($this->effectiveModel($product) ?? ''));
-        if ($model !== '' && $model !== '-') return $this->normalizeIdentifier($model);
+        if ($model !== '' && $model !== '-') {
+            return $this->normalizeIdentifier($model);
+        }
 
         $sku = trim((string) ($product->sku ?? ''));
-        if ($sku !== '' && $sku !== '-') return $this->normalizeIdentifier($sku);
+        if ($sku !== '' && $sku !== '-') {
+            return $this->normalizeIdentifier($sku);
+        }
 
         return null;
     }
@@ -813,8 +1524,8 @@ class AutoProductSearchService
     protected function effectiveModel(Product $product): ?string
     {
         $model = trim((string) ($product->model ?? ''));
+
         if ($model !== '' && $model !== '-') {
-            // Ако моделът съдържа "/" (напр. FTXA20CW/RXA20A8) — вземи само първата част
             if (str_contains($model, '/')) {
                 $parts = array_values(array_filter(array_map('trim', explode('/', $model))));
                 $model = $parts[0] ?? $model;
@@ -824,11 +1535,12 @@ class AutoProductSearchService
 
         $name  = trim((string) ($product->name ?? ''));
         $brand = mb_strtolower(trim((string) ($product->brand ?? '')));
-        if ($name === '') return null;
+        if ($name === '') {
+            return null;
+        }
 
         $norm = $this->normalizeIdentifier($name);
 
-        // Ако има "FTXA20CW/RXA20A8" в name — вземи само първата част
         if (preg_match('/\b([A-Z0-9]{4,}(?:\/[A-Z0-9]{4,})+)\b/u', $norm, $mx)) {
             $first = explode('/', $mx[1])[0];
             if (strlen(preg_replace('/[^A-Z0-9]/', '', $first)) >= 4) {
@@ -853,76 +1565,95 @@ class AutoProductSearchService
         preg_match_all('/\b([A-Z0-9][A-Z0-9\/\.\-]{3,})\b/u', $norm, $ms);
         foreach (($ms[1] ?? []) as $c) {
             $c = trim((string) $c);
-            if ($c === '' || mb_strtolower($c) === $brand || !preg_match('/\d/', $c)) continue;
-            if (strlen(preg_replace('/[^A-Z0-9]/', '', $c)) >= 4) return $c;
+            if ($c === '' || mb_strtolower($c) === $brand || ! preg_match('/\d/', $c)) {
+                continue;
+            }
+            if (strlen(preg_replace('/[^A-Z0-9]/', '', $c)) >= 4) {
+                return $c;
+            }
         }
 
         return null;
     }
 
     // ================================================================
-    // HTTP
+    // FIX: fetchHtml — shell curl за Techmart, Laravel Http за останалите
     // ================================================================
 
     protected function fetchHtml(string $url, string $referer = ''): ?string
     {
+        if (str_contains($url, 'techmart.bg')) {
+            return $this->fetchHtmlShell($url, $referer ?: 'https://techmart.bg/');
+        }
+
         try {
-            $resp = Http::timeout(20)->withHeaders($this->headers($referer ?: $url))->get($url);
-            if (!$resp->successful()) {
-                usleep(300000);
-                $resp = Http::timeout(20)->withHeaders($this->headers($referer ?: $url))->get($url);
-                if (!$resp->successful()) return null;
+            $resp = Http::timeout(20)
+                ->withoutVerifying()
+                ->withOptions([
+                    'curl' => [
+                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_SSL_VERIFYHOST => false,
+                    ],
+                ])
+                ->withHeaders($this->headers($referer ?: $url))
+                ->get($url);
+
+            if ($resp->status() === 429 || $resp->status() === 403) {
+                Log::warning('fetchHtml rate limited', [
+                    'url'    => $url,
+                    'status' => $resp->status(),
+                ]);
+
+                $resp = Http::timeout(20)
+                    ->withoutVerifying()
+                    ->withOptions([
+                        'curl' => [
+                            CURLOPT_SSL_VERIFYPEER => false,
+                            CURLOPT_SSL_VERIFYHOST => false,
+                        ],
+                    ])
+                    ->withHeaders($this->headers($referer ?: $url))
+                    ->get($url);
             }
+
+            if (! $resp->successful()) {
+                return null;
+            }
+
             return $resp->body();
-        } catch (\Throwable) { return null; }
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
-    protected function warmupZora(): void
+    protected function fetchHtmlShell(string $url, string $referer = ''): ?string
     {
-        if (static::$zoraWarmedUp) return;
-        $cookieFile = storage_path('app/zora_cookies.txt');
-        if (!is_dir(dirname($cookieFile))) @mkdir(dirname($cookieFile), 0777, true);
-        if (!file_exists($cookieFile)) @touch($cookieFile);
-        shell_exec(sprintf(
-            '/usr/bin/curl -s -o /dev/null -L --max-time 20 --cookie-jar %s --cookie %s -H %s -H %s -H %s %s',
-            escapeshellarg($cookieFile), escapeshellarg($cookieFile),
-            escapeshellarg('User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'),
-            escapeshellarg('Accept-Language: bg-BG,bg;q=0.9,en-US;q=0.8,en;q=0.7'),
-            escapeshellarg('Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
-            escapeshellarg('https://zora.bg/')
-        ));
-        static::$zoraWarmedUp = true;
-    }
-
-    protected function fetchZoraHtml(string $url): ?string
-    {
-        $this->warmupZora();
-        $cookieFile = storage_path('app/zora_cookies.txt');
-
         $cmd = sprintf(
-            '/usr/bin/curl -s -L --max-time 25 --cookie-jar %s --cookie %s -H %s -H %s -H %s -H %s -w "HTTPSTATUS:%%{http_code}" %s',
-            escapeshellarg($cookieFile), escapeshellarg($cookieFile),
-            escapeshellarg('User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'),
-            escapeshellarg('Accept-Language: bg-BG,bg;q=0.9,en-US;q=0.8,en;q=0.7'),
+            'curl -sk -L --max-time 20 ' .
+            '-H %s ' .
+            '-H %s ' .
+            '-H %s ' .
+            '-H %s ' .
+            '-w "HTTPSTATUS:%%{http_code}" ' .
+            '%s',
+            escapeshellarg('User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'),
+            escapeshellarg('Accept-Language: bg-BG,bg;q=0.9,en;q=0.8'),
             escapeshellarg('Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
-            escapeshellarg('Referer: https://zora.bg/'),
+            escapeshellarg('Referer: ' . ($referer ?: 'https://techmart.bg/')),
             escapeshellarg($url)
         );
 
-        $out    = (string) shell_exec($cmd);
-        preg_match('/HTTPSTATUS:(\d+)$/', $out, $m);
-        $status = (int) ($m[1] ?? 0);
-        $body   = (string) preg_replace('/HTTPSTATUS:\d+$/', '', $out);
+        $output = (string) shell_exec($cmd);
 
-        if ($status < 200 || $status >= 300 || empty(trim($body))) {
-            usleep(800000);
-            $out    = (string) shell_exec($cmd);
-            preg_match('/HTTPSTATUS:(\d+)$/', $out, $m);
-            $status = (int) ($m[1] ?? 0);
-            $body   = (string) preg_replace('/HTTPSTATUS:\d+$/', '', $out);
+        preg_match('/HTTPSTATUS:(\d+)$/', $output, $matches);
+        $status = (int) ($matches[1] ?? 0);
+        $body   = (string) preg_replace('/HTTPSTATUS:\d+$/', '', $output);
+
+        if ($status < 200 || $status >= 300 || trim($body) === '') {
+            return null;
         }
 
-        return ($status >= 200 && $status < 300 && !empty(trim($body))) ? $body : null;
+        return $body;
     }
 
     // ================================================================
@@ -949,18 +1680,27 @@ class AutoProductSearchService
     protected function identifierVariants(string $id): array
     {
         $id = $this->normalizeIdentifier((string) $id);
-        if ($id === '' || $id === '-') return [];
+        if ($id === '' || $id === '-') {
+            return [];
+        }
 
         $variants = [
             $id,
-            str_replace('/', '',  $id), str_replace('/', '-', $id), str_replace('/', ' ', $id),
-            str_replace('.', '',  $id), str_replace('.', '-', $id), str_replace('.', ' ', $id),
+            str_replace('/', '',  $id),
+            str_replace('/', '-', $id),
+            str_replace('/', ' ', $id),
+            str_replace('.', '',  $id),
+            str_replace('.', '-', $id),
+            str_replace('.', ' ', $id),
             str_replace(['/', '.'], '',  $id),
             str_replace(['/', '.'], '-', $id),
             str_replace(['/', '.'], ' ', $id),
         ];
+
         $flat = preg_replace('/[^A-Z0-9]/', '', $id);
-        if ($flat !== '') $variants[] = $flat;
+        if ($flat !== '') {
+            $variants[] = $flat;
+        }
 
         return array_values(array_unique(array_filter($variants)));
     }
@@ -973,17 +1713,23 @@ class AutoProductSearchService
         foreach ($this->identifierVariants($identifier) as $v) {
             $vNorm = $this->normalizeIdentifier($v);
             $vFlat = preg_replace('/[^A-Z0-9]/', '', $vNorm);
-            if ($vNorm !== '' && str_contains($tNorm, $vNorm)) return true;
-            if ($vFlat !== '' && str_contains($tFlat, $vFlat)) return true;
 
-            // Fuzzy prefix: ако identifier е >= 6 символа, опитай съкратен prefix
+            if ($vNorm !== '' && str_contains($tNorm, $vNorm)) {
+                return true;
+            }
+            if ($vFlat !== '' && str_contains($tFlat, $vFlat)) {
+                return true;
+            }
+
             if (strlen($vFlat) >= 6) {
                 for ($len = strlen($vFlat) - 1; $len >= 6; $len--) {
-                    $prefix = substr($vFlat, 0, $len);
-                    if (str_contains($tFlat, $prefix)) return true;
+                    if (str_contains($tFlat, substr($vFlat, 0, $len))) {
+                        return true;
+                    }
                 }
             }
         }
+
         return false;
     }
 
@@ -993,14 +1739,17 @@ class AutoProductSearchService
             'Pazaruvaj'    => 'https://www.pazaruvaj.com',
             'Technopolis'  => 'https://www.technopolis.bg',
             'Technomarket' => 'https://www.technomarket.bg',
-            'Zora'         => 'https://zora.bg',
+            'Techmart'     => 'https://techmart.bg',
+            'Tehnomix'     => 'https://www.tehnomix.bg',
             default        => '',
         };
     }
 
     protected function makeAbsoluteUrl(string $url, string $base): string
     {
-        if (Str::startsWith($url, ['http://', 'https://'])) return $url;
+        if (Str::startsWith($url, ['http://', 'https://'])) {
+            return $url;
+        }
         return rtrim($base, '/') . '/' . ltrim($url, '/');
     }
 
@@ -1009,8 +1758,20 @@ class AutoProductSearchService
         $url   = html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $url   = preg_replace('/[\s"<>\'\]\)]+$/', '', $url);
         $parts = parse_url(trim($url));
-        if (!$parts || empty($parts['scheme']) || empty($parts['host'])) return trim($url);
-        return $parts['scheme'] . '://' . $parts['host'] . ($parts['path'] ?? '');
+
+        if (! $parts || empty($parts['scheme']) || empty($parts['host'])) {
+            return trim($url);
+        }
+
+        $scheme = $parts['scheme'];
+        $host   = mb_strtolower($parts['host']);
+        $path   = $parts['path'] ?? '';
+
+        if ($host === 'www.techmart.bg') {
+            $host = 'techmart.bg';
+        }
+
+        return $scheme . '://' . $host . $path;
     }
 
     protected function headers(string $referer): array

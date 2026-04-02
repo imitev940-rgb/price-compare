@@ -14,6 +14,7 @@ class Product extends Model
         'product_url',
         'our_price',
         'is_active',
+        'scan_priority',
     ];
 
     protected $casts = [
@@ -34,5 +35,10 @@ class Product extends Model
     public function pazaruvajOffers()
     {
         return $this->hasMany(\App\Models\PazaruvajOffer::class);
+    }
+
+    public function getScanPriorityAttribute($value): string
+    {
+        return $value ?: 'normal';
     }
 }

@@ -2,14 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Jobs\AutoSearchProductJob;
+use App\Jobs\PriceCheckProductJob;
+use App\Models\ImportError;
 use App\Models\ImportJob;
 use App\Models\Product;
+use App\Services\OwnProductPriceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -29,7 +32,7 @@ class ImportProductsJob implements ShouldQueue
     {
         $importJob = ImportJob::find($this->importJobId);
 
-        if (!$importJob) {
+        if (! $importJob) {
             return;
         }
 
@@ -47,7 +50,7 @@ class ImportProductsJob implements ShouldQueue
 
             $fullPath = storage_path('app/' . $importJob->file_path);
 
-            if (!file_exists($fullPath)) {
+            if (! file_exists($fullPath)) {
                 throw new \RuntimeException('Import file not found: ' . $fullPath);
             }
 
@@ -73,18 +76,22 @@ class ImportProductsJob implements ShouldQueue
 
             $dataRows = array_slice($sheetRows, 1);
 
-            Log::info('IMPORT HEADER', [
-                'import_job_id' => $importJob->id,
-                'header' => $header,
-            ]);
-
             $importJob->update([
                 'total_rows' => count($dataRows),
             ]);
 
-            foreach ($dataRows as $row) {
+            foreach ($dataRows as $index => $row) {
+                $rowNumber = $index + 2;
+
                 try {
-                    if (!is_array($row)) {
+                    if (! is_array($row)) {
+                        ImportError::create([
+                            'import_job_id' => $importJob->id,
+                            'row_number' => $rowNumber,
+                            'row_data' => json_encode($row),
+                            'error_message' => 'Невалиден ред',
+                        ]);
+
                         $importJob->increment('error_count');
                         $importJob->increment('processed_rows');
                         continue;
@@ -96,14 +103,29 @@ class ImportProductsJob implements ShouldQueue
 
                     $data = array_combine($header, array_slice($row, 0, count($header)));
 
-                    if (!$data) {
+                    if (! $data) {
+                        ImportError::create([
+                            'import_job_id' => $importJob->id,
+                            'row_number' => $rowNumber,
+                            'row_data' => json_encode($row),
+                            'error_message' => 'Header mismatch',
+                        ]);
+
                         $importJob->increment('error_count');
                         $importJob->increment('processed_rows');
                         continue;
                     }
 
                     $name = trim((string) ($data['name'] ?? ''));
+
                     if ($name === '') {
+                        ImportError::create([
+                            'import_job_id' => $importJob->id,
+                            'row_number' => $rowNumber,
+                            'row_data' => json_encode($data),
+                            'error_message' => 'Липсва име на продукт',
+                        ]);
+
                         $importJob->increment('error_count');
                         $importJob->increment('processed_rows');
                         continue;
@@ -119,11 +141,11 @@ class ImportProductsJob implements ShouldQueue
                         $product = Product::where('sku', $sku)->first();
                     }
 
-                    if (!$product && $ean !== '') {
+                    if (! $product && $ean !== '') {
                         $product = Product::where('ean', $ean)->first();
                     }
 
-                    if (!$product && $model !== '' && Schema::hasColumn('products', 'model')) {
+                    if (! $product && $model !== '' && Schema::hasColumn('products', 'model')) {
                         $product = Product::where('model', $model)->first();
                     }
 
@@ -133,7 +155,11 @@ class ImportProductsJob implements ShouldQueue
                         'ean' => $ean !== '' ? $ean : null,
                         'brand' => trim((string) ($data['brand'] ?? '')) ?: null,
                         'product_url' => trim((string) ($data['product_url'] ?? '')) ?: null,
-                        'is_active' => 1,
+                        'is_active' => in_array(
+                            strtolower(trim((string) ($data['is_active'] ?? '1'))),
+                            ['1', 'true', 'yes', 'on'],
+                            true
+                        ) ? 1 : 0,
                     ];
 
                     if (Schema::hasColumn('products', 'model')) {
@@ -144,7 +170,7 @@ class ImportProductsJob implements ShouldQueue
 
                     if ($price !== null) {
                         $productData['our_price'] = number_format($price, 2, '.', '');
-                    } elseif (!empty($data['our_price'])) {
+                    } elseif (! empty($data['our_price'])) {
                         $productData['our_price'] = number_format(
                             (float) str_replace(',', '.', (string) $data['our_price']),
                             2,
@@ -152,6 +178,13 @@ class ImportProductsJob implements ShouldQueue
                             ''
                         );
                     } else {
+                        ImportError::create([
+                            'import_job_id' => $importJob->id,
+                            'row_number' => $rowNumber,
+                            'row_data' => json_encode($data),
+                            'error_message' => 'Не може да се вземе цена',
+                        ]);
+
                         $importJob->increment('error_count');
                         $importJob->increment('processed_rows');
                         continue;
@@ -165,14 +198,25 @@ class ImportProductsJob implements ShouldQueue
                         $importJob->increment('imported_count');
                     }
 
-                    Artisan::call('products:auto-search', [
-                        'product_id' => $product->id,
+                    dispatch(
+                        (new AutoSearchProductJob($product->id))
+                            ->onQueue('search')
+                            ->delay(now()->addSeconds(1))
+                    );
+
+                    dispatch(
+                        (new PriceCheckProductJob($product->id))
+                            ->onQueue('price')
+                            ->delay(now()->addSeconds(5))
+                    );
+                } catch (\Throwable $e) {
+                    ImportError::create([
+                        'import_job_id' => $importJob->id,
+                        'row_number' => $rowNumber,
+                        'row_data' => json_encode($row),
+                        'error_message' => $e->getMessage(),
                     ]);
 
-                    Artisan::call('prices:check', [
-                        'product_id' => $product->id,
-                    ]);
-                } catch (\Throwable $e) {
                     Log::error('Import row error', [
                         'import_job_id' => $importJob->id,
                         'row' => $row,
@@ -227,7 +271,7 @@ class ImportProductsJob implements ShouldQueue
         $rows = [];
         $handle = fopen($fullPath, 'r');
 
-        if (!$handle) {
+        if (! $handle) {
             throw new \RuntimeException('Cannot open CSV file.');
         }
 
@@ -246,13 +290,13 @@ class ImportProductsJob implements ShouldQueue
 
     private function getPriceWithRetry(?string $url): ?float
     {
-        if (!$url) {
+        if (! $url) {
             return null;
         }
 
         for ($i = 0; $i < 3; $i++) {
             try {
-                $price = app(\App\Services\OwnProductPriceService::class)->getPrice($url);
+                $price = app(OwnProductPriceService::class)->getPrice($url);
 
                 if ($price !== null) {
                     return $price;

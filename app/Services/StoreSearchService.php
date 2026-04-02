@@ -12,10 +12,11 @@ class StoreSearchService
     {
         return match ($storeKey) {
             'technomarket' => $this->searchTechnomarket($product),
-            'technopolis' => $this->searchTechnopolis($product),
-            'zora' => $this->searchZora($product),
-            'pazaruvaj' => $this->searchPazaruvajFallback($product),
-            default => null,
+            'technopolis'  => $this->searchTechnopolis($product),
+            'techmart'     => $this->searchTechmart($product),
+            'tehnomix'     => $this->searchTehnomix($product),
+            'pazaruvaj'    => $this->searchPazaruvajFallback($product),
+            default        => null,
         };
     }
 
@@ -99,7 +100,7 @@ class StoreSearchService
         return null;
     }
 
-    protected function searchZora(Product $product): ?array
+    protected function searchTechmart(Product $product): ?array
     {
         $terms = $this->buildDirectTerms($product);
 
@@ -107,17 +108,15 @@ class StoreSearchService
             try {
                 $response = Http::timeout(10)
                     ->withHeaders($this->headers())
-                    ->get('https://zora.bg/search', [
-                        'query' => $term,
-                    ]);
+                    ->get('https://techmart.bg/product/product/searchProducts/search/' . urlencode($term));
 
                 if (! $response->successful()) {
                     continue;
                 }
 
-                $candidate = $this->extractZoraCandidate($response->body(), $product);
+                $candidate = $this->extractTechmartCandidate($response->body(), $product);
 
-                Log::info('Zora direct search', [
+                Log::info('Techmart direct search', [
                     'product_id' => $product->id,
                     'term' => $term,
                     'found' => $candidate ? true : false,
@@ -128,7 +127,47 @@ class StoreSearchService
                     return $candidate;
                 }
             } catch (\Throwable $e) {
-                Log::warning('Zora direct search failed', [
+                Log::warning('Techmart direct search failed', [
+                    'product_id' => $product->id,
+                    'term' => $term,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    protected function searchTehnomix(Product $product): ?array
+    {
+        $terms = $this->buildDirectTerms($product);
+
+        foreach ($terms as $term) {
+            try {
+                $response = Http::timeout(10)
+                    ->withHeaders($this->headers())
+                    ->get('https://www.tehnomix.bg/catalogsearch/result/', [
+                        'q' => $term,
+                    ]);
+
+                if (! $response->successful()) {
+                    continue;
+                }
+
+                $candidate = $this->extractTehnomixCandidate($response->body(), $product);
+
+                Log::info('Tehnomix direct search', [
+                    'product_id' => $product->id,
+                    'term' => $term,
+                    'found' => $candidate ? true : false,
+                    'url' => $candidate['product_url'] ?? null,
+                ]);
+
+                if ($candidate) {
+                    return $candidate;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Tehnomix direct search failed', [
                     'product_id' => $product->id,
                     'term' => $term,
                     'message' => $e->getMessage(),
@@ -235,35 +274,7 @@ class StoreSearchService
             PREG_SET_ORDER
         );
 
-        $best = null;
-
-        foreach ($matches as $match) {
-            $url = html_entity_decode($match[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            $title = $this->cleanTitle($match[2] ?? '');
-            $url = $this->makeAbsoluteUrl($url, 'https://www.technomarket.bg');
-
-            if (! $url || $this->isBadUrl($url)) {
-                continue;
-            }
-
-            $score = $this->calculateMatchScore($product, $url, $title);
-
-            if ($score < 35) {
-                continue;
-            }
-
-            if (! $best || $score > $best['match_score']) {
-                $best = [
-                    'product_url' => $this->normalizeUrl($url),
-                    'matched_title' => $title,
-                    'last_price' => null,
-                    'search_status' => 'found',
-                    'match_score' => $score,
-                ];
-            }
-        }
-
-        return $best;
+        return $this->pickBestCandidate($matches, $product, 'https://www.technomarket.bg');
     }
 
     protected function extractTechnopolisCandidate(string $html, Product $product): ?array
@@ -275,18 +286,40 @@ class StoreSearchService
             PREG_SET_ORDER
         );
 
+        return $this->pickBestCandidate($matches, $product, 'https://www.technopolis.bg');
+    }
+
+    protected function extractTechmartCandidate(string $html, Product $product): ?array
+    {
+        preg_match_all(
+            '/href="([^"]+)"/iu',
+            $html,
+            $matches,
+            PREG_SET_ORDER
+        );
+
         $best = null;
 
         foreach ($matches as $match) {
-            $url = html_entity_decode($match[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            $title = $this->cleanTitle($match[2] ?? '');
-            $url = $this->makeAbsoluteUrl($url, 'https://www.technopolis.bg');
+            $href = html_entity_decode($match[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $url = $this->makeAbsoluteUrl($href, 'https://techmart.bg');
 
             if (! $url || $this->isBadUrl($url)) {
                 continue;
             }
 
-            $score = $this->calculateMatchScore($product, $url, $title);
+            if (! str_contains($url, 'techmart.bg')) {
+                continue;
+            }
+
+            $path = parse_url($url, PHP_URL_PATH) ?? '';
+            $slug = trim((string) basename($path), '/');
+
+            if ($slug === '' || substr_count($slug, '-') < 2 || ! preg_match('/\d/', $slug)) {
+                continue;
+            }
+
+            $score = $this->calculateMatchScore($product, $url, null);
 
             if ($score < 35) {
                 continue;
@@ -295,7 +328,7 @@ class StoreSearchService
             if (! $best || $score > $best['match_score']) {
                 $best = [
                     'product_url' => $this->normalizeUrl($url),
-                    'matched_title' => $title,
+                    'matched_title' => null,
                     'last_price' => null,
                     'search_status' => 'found',
                     'match_score' => $score,
@@ -306,10 +339,10 @@ class StoreSearchService
         return $best;
     }
 
-    protected function extractZoraCandidate(string $html, Product $product): ?array
+    protected function extractTehnomixCandidate(string $html, Product $product): ?array
     {
         preg_match_all(
-            '/href="([^"]*\/product\/[a-z0-9\-]+)"[^>]*>(.*?)<\/a>/isu',
+            '/href="([^"]+)"/iu',
             $html,
             $matches,
             PREG_SET_ORDER
@@ -318,9 +351,52 @@ class StoreSearchService
         $best = null;
 
         foreach ($matches as $match) {
+            $href = html_entity_decode($match[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $url = $this->makeAbsoluteUrl($href, 'https://www.tehnomix.bg');
+
+            if (! $url || $this->isBadUrl($url)) {
+                continue;
+            }
+
+            if (! str_contains($url, 'tehnomix.bg')) {
+                continue;
+            }
+
+            $path = parse_url($url, PHP_URL_PATH) ?? '';
+            $slug = trim((string) basename($path), '/');
+
+            if ($slug === '' || substr_count($slug, '-') < 2 || ! preg_match('/\d/', $slug)) {
+                continue;
+            }
+
+            $score = $this->calculateMatchScore($product, $url, null);
+
+            if ($score < 35) {
+                continue;
+            }
+
+            if (! $best || $score > $best['match_score']) {
+                $best = [
+                    'product_url' => $this->normalizeUrl($url),
+                    'matched_title' => null,
+                    'last_price' => null,
+                    'search_status' => 'found',
+                    'match_score' => $score,
+                ];
+            }
+        }
+
+        return $best;
+    }
+
+    protected function pickBestCandidate(array $matches, Product $product, string $baseUrl): ?array
+    {
+        $best = null;
+
+        foreach ($matches as $match) {
             $url = html_entity_decode($match[1] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $title = $this->cleanTitle($match[2] ?? '');
-            $url = $this->makeAbsoluteUrl($url, 'https://zora.bg');
+            $url = $this->makeAbsoluteUrl($url, $baseUrl);
 
             if (! $url || $this->isBadUrl($url)) {
                 continue;

@@ -79,14 +79,12 @@
             <div class="mb-4">
                 <label>{{ __('messages.our_price') }}</label>
                 <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="99999.99"
+                    type="text"
                     id="our_price"
                     name="our_price"
-                    value="{{ old('our_price', $product->our_price) }}"
+                    value="{{ old('our_price', $product->our_price !== null ? number_format((float)$product->our_price, 2, '.', '') : '') }}"
                     readonly
+                    inputmode="decimal"
                 >
                 <small id="price_status" style="display:block; margin-top:6px; color:#667085;">
                     {{ __('messages.price_field_auto_edit') }}
@@ -99,6 +97,23 @@
                     <option value="1" {{ old('is_active', $product->is_active) == 1 ? 'selected' : '' }}>{{ __('messages.active') }}</option>
                     <option value="0" {{ old('is_active', $product->is_active) == 0 ? 'selected' : '' }}>{{ __('messages.inactive') }}</option>
                 </select>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 260px; gap:20px; align-items:start;">
+            <div class="mb-4">
+                <label>Scan Priority</label>
+                <select name="scan_priority">
+                    <option value="normal" {{ old('scan_priority', $product->scan_priority ?? 'normal') === 'normal' ? 'selected' : '' }}>
+                        Normal Product
+                    </option>
+                    <option value="top" {{ old('scan_priority', $product->scan_priority ?? 'normal') === 'top' ? 'selected' : '' }}>
+                        Top Product
+                    </option>
+                </select>
+                <small style="display:block; margin-top:6px; color:#667085;">
+                    Top Product = по-често сканиране. Normal Product = стандартни правила.
+                </small>
             </div>
         </div>
 
@@ -135,9 +150,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const url = urlInput.value.trim();
 
         if (!url) {
-            priceInput.value = '';
-            priceStatus.textContent = @json(__('messages.price_field_auto_edit'));
-            disableSave();
+            if (priceInput.value.trim()) {
+                priceStatus.textContent = @json(__('messages.price_field_auto_edit'));
+                enableSave();
+            } else {
+                priceInput.value = '';
+                priceStatus.textContent = @json(__('messages.price_field_auto_edit'));
+                disableSave();
+            }
             return;
         }
 
@@ -180,9 +200,11 @@ document.addEventListener('DOMContentLoaded', function () {
         timeout = setTimeout(fetchPrice, 600);
     }
 
-    // ако има валиден URL при отваряне - пробвай да заредиш цената веднага
     if (urlInput.value.trim()) {
         fetchPrice();
+    } else if (priceInput.value.trim()) {
+        enableSave();
+        priceStatus.textContent = @json(__('messages.price_field_auto_edit'));
     } else {
         disableSave();
     }

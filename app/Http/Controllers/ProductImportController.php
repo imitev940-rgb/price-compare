@@ -9,17 +9,29 @@ use Illuminate\Support\Str;
 
 class ProductImportController extends Controller
 {
-    public function create()
+    public function create(Request $request)
     {
-        $latestImports = ImportJob::latest()->take(10)->get();
+        $search = trim((string) $request->get('search', ''));
+        $status = trim((string) $request->get('status', ''));
 
-        return view('products.import', compact('latestImports'));
+        $latestImports = ImportJob::query()
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where('original_name', 'like', '%' . $search . '%');
+            })
+            ->when($status !== '' && in_array($status, ['pending', 'processing', 'completed', 'failed'], true), function ($query) use ($status) {
+                $query->where('status', $status);
+            })
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('products.import', compact('latestImports', 'search', 'status'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,csv,txt',
+            'file' => 'required|file|mimes:csv,txt',
         ]);
 
         $file = $request->file('file');
@@ -48,6 +60,14 @@ class ProductImportController extends Controller
             'file_path' => $relativePath,
             'original_name' => $file->getClientOriginalName(),
             'status' => 'pending',
+            'total_rows' => 0,
+            'processed_rows' => 0,
+            'imported_count' => 0,
+            'updated_count' => 0,
+            'error_count' => 0,
+            'last_error' => null,
+            'started_at' => null,
+            'finished_at' => null,
         ]);
 
         ImportProductsJob::dispatch($importJob->id);
@@ -73,13 +93,15 @@ class ProductImportController extends Controller
             'error_count' => $importJob->error_count,
             'progress_percent' => $importJob->progress_percent,
             'last_error' => $importJob->last_error,
-            'started_at' => optional($importJob->started_at)->toDateTimeString(),
-            'finished_at' => optional($importJob->finished_at)->toDateTimeString(),
+            'started_at' => optional($importJob->started_at)->format('d.m.Y H:i:s'),
+            'finished_at' => optional($importJob->finished_at)->format('d.m.Y H:i:s'),
         ]);
     }
 
     public function show(ImportJob $importJob)
     {
+        $importJob->load('errors');
+
         return view('products.import-show', compact('importJob'));
     }
 
@@ -97,6 +119,7 @@ class ProductImportController extends Controller
             'brand',
             'model',
             'product_url',
+            'our_price',
             'is_active',
         ];
 
@@ -114,6 +137,7 @@ class ProductImportController extends Controller
                 'Philips',
                 'EP2330/10',
                 'https://technika.bg/product/example',
+                '499.99',
                 '1',
             ]);
 

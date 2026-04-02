@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Support\Facades\Event;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,6 +22,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Tailwind pagination
         Paginator::useTailwind();
+
+        // 🔥 Last login tracking
+        Event::listen(Login::class, function ($event) {
+            $user = $event->user;
+
+            if ($user) {
+                $user->forceFill([
+                    'last_login_at' => now(),
+                ])->save();
+            }
+        });
     }
 }

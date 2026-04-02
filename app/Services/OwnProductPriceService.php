@@ -32,13 +32,20 @@ class OwnProductPriceService
                 return null;
             }
 
-            $html = mb_substr($response->body(), 0, 700000);
+            $html = mb_substr($response->body(), 0, 900000);
 
             if (str_contains(mb_strtolower($url), 'technika.bg')) {
-                return $this->extractTechnikaPrice($html);
+                $price = $this->extractTechnikaPrice($html);
+
+                Log::info('OwnProductPriceService technika result', [
+                    'url' => $url,
+                    'price' => $price,
+                ]);
+
+                return $price;
             }
 
-            return $this->extractGenericPrice($html);
+            return $this->extractGenericEuroPrice($html);
         } catch (\Throwable $e) {
             Log::warning('OwnProductPriceService failed', [
                 'url' => $url,
@@ -53,75 +60,91 @@ class OwnProductPriceService
     {
         $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // 1) Най-сигурно: "Цена на продукта"
-        if (preg_match('/Цена на продукта:\s*€\s*([0-9\.,\^\{\}\s]+)/u', $decoded, $m)) {
-            $value = $this->normalizeTechnikaEuro($m[1]);
-            if ($value !== null) {
-                return $value;
-            }
-        }
+        // 1) Най-важно: цена със sup за стотинки
+        // Примери:
+        // €399<sup>99</sup>
+        // €1,153<sup>00</sup>
+        // €399<span>99</span>
+        $patternsWithDecimals = [
+            '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*<(?:sup|span)[^>]*>\s*([0-9]{2})\s*<\/(?:sup|span)>/iu',
+            '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*[\.,]\s*([0-9]{2})/iu',
+            '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*\^\{?\s*([0-9]{2})\s*\}?/iu',
+        ];
 
-        // 2) Само блокът между "Цена:" и "ПЦД:"
-        if (preg_match('/Цена:(.*?)ПЦД:/isu', $decoded, $block)) {
-            $priceBlock = $block[1];
-
-            // първо 1153.00 EUR
-            if (preg_match('/([0-9\.,\^\{\}\s]+)\s*EUR\b/u', $priceBlock, $m)) {
-                $value = $this->normalizeTechnikaEuro($m[1]);
-                if ($value !== null) {
-                    return $value;
-                }
-            }
-
-            // после €1,153^{00} или €1,153.00
-            if (preg_match('/€\s*([0-9\.,\^\{\}\s]+)/u', $priceBlock, $m)) {
-                $value = $this->normalizeTechnikaEuro($m[1]);
+        foreach ($patternsWithDecimals as $pattern) {
+            if (preg_match($pattern, $decoded, $m)) {
+                $combined = $m[1] . '.' . $m[2];
+                $value = $this->normalizeEuroPrice($combined);
                 if ($value !== null) {
                     return $value;
                 }
             }
         }
 
-        // 3) Plain text fallback
+        // 2) fallback - plain text, ако HTML е станал вече 399.99
         $plain = strip_tags($decoded);
         $plain = preg_replace('/\s+/u', ' ', $plain);
         $plain = trim($plain);
 
-        if (preg_match('/Цена на продукта:\s*€\s*([0-9\.,\s]+)/u', $plain, $m)) {
-            $value = $this->normalizeTechnikaEuro($m[1]);
+        if (preg_match('/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))/iu', $plain, $m)) {
+            $value = $this->normalizeEuroPrice($m[1]);
             if ($value !== null) {
                 return $value;
             }
         }
 
-        // взима само първата цена след "Цена:"
-        if (preg_match('/Цена:\s*€\s*([0-9\.,\s]+)/u', $plain, $m)) {
-            $value = $this->normalizeTechnikaEuro($m[1]);
+        // 3) fallback за цена преди /
+        // €399.99 / 782.31 лв.
+        if (preg_match('/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))\s*\//iu', $plain, $m)) {
+            $value = $this->normalizeEuroPrice($m[1]);
             if ($value !== null) {
                 return $value;
             }
         }
+
+        Log::warning('Technika euro price not found', [
+            'plain_excerpt' => mb_substr($plain, 0, 1500),
+        ]);
 
         return null;
     }
 
-    private function extractGenericPrice(string $html): ?float
+    private function extractGenericEuroPrice(string $html): ?float
     {
+        $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $plain = strip_tags($decoded);
+        $plain = preg_replace('/\s+/u', ' ', $plain);
+        $plain = trim($plain);
+
         $patterns = [
-            '/<meta[^>]+property=["\']product:price:amount["\'][^>]+content=["\']([^"\']+)["\']/iu',
-            '/<meta[^>]+itemprop=["\']price["\'][^>]+content=["\']([^"\']+)["\']/iu',
-            '/<meta[^>]+name=["\']price["\'][^>]+content=["\']([^"\']+)["\']/iu',
-            '/"price"\s*:\s*"([^"]+)"/iu',
-            '/"price"\s*:\s*([0-9\.,]+)/iu',
-            '/([0-9]{1,6}[.,][0-9]{2})\s*(€|EUR|лв\.?|BGN)/iu',
+            '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))/iu',
+            '/([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))\s*(?:€|EUR)\b/iu',
         ];
 
         foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $html, $matches)) {
-                $price = $this->normalizePriceWithCurrency($matches[1], $matches[2] ?? null);
+            if (preg_match($pattern, $plain, $m)) {
+                $value = $this->normalizeEuroPrice($m[1]);
+                if ($value !== null) {
+                    return $value;
+                }
+            }
+        }
 
-                if ($price !== null && $price > 0) {
-                    return $price;
+        if (preg_match('/(priceCurrency|product:price:currency|currency)["\']?\s*[:=]\s*["\']EUR["\']/iu', $decoded)) {
+            $structuredPricePatterns = [
+                '/<meta[^>]+property=["\']product:price:amount["\'][^>]+content=["\']([^"\']+)["\']/iu',
+                '/<meta[^>]+itemprop=["\']price["\'][^>]+content=["\']([^"\']+)["\']/iu',
+                '/<meta[^>]+name=["\']price["\'][^>]+content=["\']([^"\']+)["\']/iu',
+                '/"price"\s*:\s*"([^"]+)"/iu',
+                '/"price"\s*:\s*([0-9\.,]+)/iu',
+            ];
+
+            foreach ($structuredPricePatterns as $pattern) {
+                if (preg_match($pattern, $decoded, $m)) {
+                    $value = $this->normalizeEuroPrice($m[1]);
+                    if ($value !== null) {
+                        return $value;
+                    }
                 }
             }
         }
@@ -129,17 +152,17 @@ class OwnProductPriceService
         return null;
     }
 
-    private function normalizeTechnikaEuro(string $raw): ?float
+    private function normalizeEuroPrice(string $raw): ?float
     {
         $price = trim($raw);
 
-        // 1,153^{00} -> 1,153.00
+        if ($price === '') {
+            return null;
+        }
+
+        $price = html_entity_decode($price, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $price = str_replace(["\xc2\xa0", ' '], '', $price);
         $price = str_replace(['^{', '}'], ['.', ''], $price);
-
-        // махаме интервали
-        $price = preg_replace('/\s+/u', '', $price);
-
-        // пазим само цифри, точки и запетаи
         $price = preg_replace('/[^\d\.,]/u', '', $price);
 
         if ($price === '') {
@@ -151,21 +174,17 @@ class OwnProductPriceService
             $lastDot = strrpos($price, '.');
 
             if ($lastComma < $lastDot) {
-                // 1,153.00
                 $price = str_replace(',', '', $price);
             } else {
-                // 1.153,00
                 $price = str_replace('.', '', $price);
                 $price = str_replace(',', '.', $price);
             }
         } elseif (str_contains($price, ',')) {
             $parts = explode(',', $price);
 
-            if (count($parts) > 1 && strlen(end($parts)) === 2) {
-                // 1153,00
+            if (count($parts) > 1 && strlen((string) end($parts)) === 2) {
                 $price = str_replace(',', '.', $price);
             } else {
-                // 1,153
                 $price = str_replace(',', '', $price);
             }
         }
@@ -178,62 +197,10 @@ class OwnProductPriceService
 
         $value = (float) $price;
 
-        if ($value <= 0 || $value > 99999.99) {
+        if ($value <= 0 || $value > 999999.99) {
             return null;
         }
 
         return round($value, 2);
-    }
-
-    private function normalizePriceWithCurrency(string $rawPrice, ?string $currency = null): ?float
-    {
-        $original = trim($rawPrice);
-
-        if ($original === '') {
-            return null;
-        }
-
-        $price = html_entity_decode($original, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $price = strip_tags($price);
-        $price = str_replace(["\xc2\xa0", ' '], '', $price);
-
-        $currencyText = mb_strtolower((string) $currency . ' ' . $original);
-
-        $isBGN = str_contains($currencyText, 'лв') || str_contains($currencyText, 'bgn');
-        $isEUR = str_contains($currencyText, '€') || str_contains($currencyText, 'eur');
-
-        if (str_contains($price, ',') && str_contains($price, '.')) {
-            $lastComma = strrpos($price, ',');
-            $lastDot = strrpos($price, '.');
-
-            if ($lastComma > $lastDot) {
-                $price = str_replace('.', '', $price);
-                $price = str_replace(',', '.', $price);
-            } else {
-                $price = str_replace(',', '', $price);
-            }
-        } elseif (str_contains($price, ',')) {
-            $parts = explode(',', $price);
-
-            if (count($parts) > 1 && strlen(end($parts)) === 2) {
-                $price = str_replace(',', '.', $price);
-            } else {
-                $price = str_replace(',', '', $price);
-            }
-        }
-
-        $price = preg_replace('/[^\d\.]/', '', $price);
-
-        if ($price === '' || !is_numeric($price)) {
-            return null;
-        }
-
-        $price = (float) $price;
-
-        if ($isBGN && !$isEUR) {
-            $price = $price / 1.95583;
-        }
-
-        return round($price, 2);
     }
 }

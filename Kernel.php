@@ -9,7 +9,9 @@ class Kernel extends ConsoleKernel
 {
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('prices:check')->everyFiveMinutes();
+        $schedule->command('prices:dispatch-due')->everyFiveMinutes();
+
+        $schedule->command('price-history:cleanup 90')->daily();
     }
 
     protected function commands(): void

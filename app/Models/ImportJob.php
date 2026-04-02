@@ -25,6 +25,18 @@ class ImportJob extends Model
         'finished_at' => 'datetime',
     ];
 
+    // 🔥 ВАЖНО - добавя progress_percent към JSON
+    protected $appends = [
+        'progress_percent',
+    ];
+
+    // 🔥 ВРЪЗКА КЪМ ГРЕШКИТЕ
+    public function errors()
+    {
+        return $this->hasMany(\App\Models\ImportError::class)->latest();
+    }
+
+    // 📊 ПРОГРЕС %
     public function getProgressPercentAttribute(): int
     {
         if ((int) $this->total_rows <= 0) {

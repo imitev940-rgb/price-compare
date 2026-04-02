@@ -1,10 +1,19 @@
+@php
+    use App\Models\Setting;
+
+    $systemName = Setting::getValue('system_name', 'PriceHunterPro');
+    $footerVersion = Setting::getValue('footer_version', '8.0');
+    $createdBy = Setting::getValue('created_by', 'SITEZZY – Ivan Mitev');
+    $notificationRefreshInterval = (int) Setting::getValue('notification_refresh_interval', 10);
+@endphp
+
 <!DOCTYPE html>
 <html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>PriceHunterPro</title>
+    <title>{{ $systemName }}</title>
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
 
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -32,7 +41,7 @@
 <div class="dashboard-layout">
     <aside class="sidebar">
         <div class="sidebar-top">
-            <img src="{{ asset('images/logo.png') }}" alt="PriceHunterPro" class="sidebar-logo">
+            <img src="{{ asset('images/logo.png') }}" alt="{{ $systemName }}" class="sidebar-logo">
         </div>
 
         <nav class="sidebar-nav">
@@ -78,7 +87,7 @@
     <main class="main-panel">
         <div class="topbar">
             <div>
-                <div class="topbar-title">PriceHunterPro</div>
+                <div class="topbar-title">{{ $systemName }}</div>
                 <div class="topbar-subtitle">{{ __('messages.competitor_pricing_dashboard') }}</div>
             </div>
 
@@ -126,23 +135,50 @@
                     </div>
                 </div>
 
-                <div class="user-menu">
-                    <button class="user-btn" type="button">
+                <div class="user-menu" id="userMenu">
+                    <button class="user-btn" id="userMenuToggle" type="button" aria-haspopup="true" aria-expanded="false">
                         <span class="user-avatar">
                             {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
                         </span>
                         <span class="user-name">{{ Auth::user()->name }}</span>
+                        <i data-lucide="chevron-down" class="user-btn-chevron"></i>
                     </button>
 
-                    <div class="user-dropdown">
-                        <a href="#">{{ __('messages.profile') }}</a>
-                        <a href="#">{{ __('messages.settings') }}</a>
+                    <div class="user-dropdown" id="userDropdown">
+                        <a href="{{ route('profile.edit') }}" class="dropdown-item">
+                            <i data-lucide="user"></i>
+                            <span>{{ __('messages.profile') }}</span>
+                        </a>
+
+                        <a href="{{ route('settings.edit') }}" class="dropdown-item">
+                            <i data-lucide="settings"></i>
+                            <span>{{ __('messages.settings') }}</span>
+                        </a>
+
+                        @if(auth()->user()->isAdminLevel())
+                            <div class="dropdown-divider"></div>
+
+                            <a href="{{ route('admin.users.index') }}" class="dropdown-item">
+                                <i data-lucide="users"></i>
+                                <span>Users</span>
+                            </a>
+
+                            @if(auth()->user()->isSuperAdmin())
+                                <a href="{{ route('admin.system-settings.edit') }}" class="dropdown-item">
+                                    <i data-lucide="sliders"></i>
+                                    <span>System Settings</span>
+                                </a>
+                            @endif
+                        @endif
 
                         <div class="dropdown-divider"></div>
 
                         <form method="POST" action="{{ route('logout') }}" class="loader-form">
                             @csrf
-                            <button type="submit" class="dropdown-logout-btn">{{ __('messages.logout') }}</button>
+                            <button type="submit" class="dropdown-logout-btn">
+                                <i data-lucide="log-out"></i>
+                                <span>{{ __('messages.logout') }}</span>
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -154,9 +190,9 @@
         </div>
 
         <footer class="dashboard-footer">
-            <div>© {{ date('Y') }} PriceHunterPro</div>
-            <div>{{ __('messages.version') }} 1.0</div>
-            <div>{{ __('messages.created_by') }} <strong>SITEZZY – Ivan Mitev</strong></div>
+            <div>© {{ date('Y') }} {{ $systemName }}</div>
+            <div>{{ __('messages.version') }} {{ $footerVersion }}</div>
+            <div>{{ __('messages.created_by') }} <strong>{{ $createdBy }}</strong></div>
         </footer>
 
         <button id="scrollTopBtn">↑</button>
@@ -173,6 +209,9 @@
     const markAllNotificationsReadBtn = document.getElementById('markAllNotificationsRead');
     const loader = document.getElementById('global-loader');
     const themeToggle = document.getElementById('themeToggle');
+    const userMenu = document.getElementById('userMenu');
+    const userMenuToggle = document.getElementById('userMenuToggle');
+    const userDropdown = document.getElementById('userDropdown');
 
     let previousNotificationIds = [];
     let initialNotificationsLoaded = false;
@@ -452,6 +491,19 @@
                 }
 
                 notificationDropdown.classList.add('show');
+
+                if (userDropdown) {
+                    userDropdown.classList.remove('show');
+                }
+
+                if (userMenu) {
+                    userMenu.classList.remove('open');
+                }
+
+                if (userMenuToggle) {
+                    userMenuToggle.setAttribute('aria-expanded', 'false');
+                }
+
                 await loadNotifications({ silent: true });
             });
 
@@ -462,6 +514,41 @@
             document.addEventListener('click', function (e) {
                 if (!notificationWrapper.contains(e.target)) {
                     notificationDropdown.classList.remove('show');
+                }
+            });
+        }
+
+        if (userMenu && userMenuToggle && userDropdown) {
+            userMenuToggle.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const isOpen = userDropdown.classList.contains('show');
+
+                if (isOpen) {
+                    userDropdown.classList.remove('show');
+                    userMenu.classList.remove('open');
+                    userMenuToggle.setAttribute('aria-expanded', 'false');
+                } else {
+                    userDropdown.classList.add('show');
+                    userMenu.classList.add('open');
+                    userMenuToggle.setAttribute('aria-expanded', 'true');
+
+                    if (notificationDropdown) {
+                        notificationDropdown.classList.remove('show');
+                    }
+                }
+            });
+
+            userDropdown.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!userMenu.contains(e.target)) {
+                    userDropdown.classList.remove('show');
+                    userMenu.classList.remove('open');
+                    userMenuToggle.setAttribute('aria-expanded', 'false');
                 }
             });
         }
@@ -498,7 +585,7 @@
 
         setInterval(() => {
             loadNotifications({ silent: false });
-        }, 10000);
+        }, {{ max(5000, $notificationRefreshInterval * 1000) }});
 
         lucide.createIcons();
     });

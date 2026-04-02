@@ -21,11 +21,6 @@
     </div>
 
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <form action="{{ route('products.auto-search', $product) }}" method="POST" style="margin:0;">
-            @csrf
-            <button type="submit" class="btn">Auto Search Links</button>
-        </form>
-
         <a href="{{ route('products.edit', $product) }}" class="btn">Edit Product</a>
         <a href="{{ route('products.index') }}" class="btn">Back</a>
     </div>
@@ -36,13 +31,27 @@
     <div class="mb-4"><strong>SKU:</strong> {{ $product->sku ?: '—' }}</div>
     <div class="mb-4"><strong>EAN:</strong> {{ $product->ean ?: '—' }}</div>
     <div class="mb-4"><strong>Brand:</strong> {{ $product->brand ?: '—' }}</div>
-    <div class="mb-4"><strong>Our Price:</strong> {{ number_format($product->our_price, 2) }} €</div>
+
+    <div class="mb-4">
+        <strong>Our Price:</strong>
+        {{ $product->our_price !== null ? number_format((float) $product->our_price, 2, '.', '') . ' €' : '—' }}
+    </div>
+
     <div class="mb-4">
         <strong>Status:</strong>
         @if($product->is_active)
             <span class="badge-green">Active</span>
         @else
             <span class="badge-red">Inactive</span>
+        @endif
+    </div>
+
+    <div class="mb-4">
+        <strong>Scan Priority:</strong>
+        @if(($product->scan_priority ?? 'normal') === 'top')
+            <span class="badge-red">Top Product</span>
+        @else
+            <span class="badge-blue">Normal Product</span>
         @endif
     </div>
 </div>
@@ -82,7 +91,7 @@
                     </td>
 
                     <td>
-                        {{ $link->last_price !== null ? number_format($link->last_price, 2) . ' €' : '—' }}
+                        {{ $link->last_price !== null ? number_format((float) $link->last_price, 2, '.', '') . ' €' : '—' }}
                     </td>
 
                     <td>

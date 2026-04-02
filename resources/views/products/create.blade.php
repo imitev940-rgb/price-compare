@@ -80,7 +80,14 @@
         <div style="display:grid; grid-template-columns: 1fr 260px; gap:20px; align-items:start;">
             <div class="mb-4">
                 <label>{{ __('messages.our_price') }}</label>
-                <input type="number" step="0.01" id="our_price" name="our_price" value="{{ old('our_price') }}" readonly>
+                <input
+                    type="text"
+                    id="our_price"
+                    name="our_price"
+                    value="{{ old('our_price') !== null && old('our_price') !== '' ? number_format((float) old('our_price'), 2, '.', '') : '' }}"
+                    readonly
+                    inputmode="decimal"
+                >
                 <small id="price_status" class="price-status" style="display:block; margin-top:6px;">
                     {{ __('messages.price_field_auto') }}
                 </small>
@@ -92,6 +99,23 @@
                     <option value="1" {{ old('is_active', 1) == 1 ? 'selected' : '' }}>{{ __('messages.active') }}</option>
                     <option value="0" {{ old('is_active') == 0 ? 'selected' : '' }}>{{ __('messages.inactive') }}</option>
                 </select>
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 260px; gap:20px; align-items:start;">
+            <div class="mb-4">
+                <label>Scan Priority</label>
+                <select name="scan_priority">
+                    <option value="normal" {{ old('scan_priority', 'normal') === 'normal' ? 'selected' : '' }}>
+                        Normal Product
+                    </option>
+                    <option value="top" {{ old('scan_priority', 'normal') === 'top' ? 'selected' : '' }}>
+                        Top Product
+                    </option>
+                </select>
+                <small style="display:block; margin-top:6px; color:#667085;">
+                    Top Product = по-често сканиране. Normal Product = стандартни правила.
+                </small>
             </div>
         </div>
 
@@ -154,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const data = await response.json();
 
-            if (data.success) {
+            if (response.ok && data.success) {
                 priceInput.value = data.price;
                 priceStatus.className = 'price-status success';
                 priceStatus.textContent = 'Price loaded • Ready to start tracking';

@@ -2,55 +2,66 @@
 
 namespace App\Imports;
 
+use App\Jobs\AutoSearchProductJob;
+use App\Jobs\PriceCheckProductJob;
 use App\Models\Product;
+use App\Services\OwnProductPriceService;
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\ToCollection;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Concerns\ToCollection;
 
 class ProductsImport implements ToCollection
 {
     public function collection(Collection $rows)
     {
-        $header = $rows->first()->map(fn($h) => trim($h))->toArray();
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $header = $rows->first()->map(fn ($h) => trim((string) $h))->toArray();
         $rows = $rows->skip(1);
 
         foreach ($rows as $row) {
             try {
                 $data = array_combine($header, $row->toArray());
 
-                if (empty($data['name'])) {
+                if (! $data || empty($data['name'])) {
                     continue;
                 }
 
                 $sku = trim((string) ($data['sku'] ?? ''));
                 $ean = trim((string) ($data['ean'] ?? ''));
+                $model = trim((string) ($data['model'] ?? ''));
 
-                // 🔥 SMART MATCHING
                 $product = null;
 
                 if ($sku !== '') {
                     $product = Product::where('sku', $sku)->first();
                 }
 
-                if (!$product && $ean !== '') {
+                if (! $product && $ean !== '') {
                     $product = Product::where('ean', $ean)->first();
                 }
 
-                if (!$product && !empty($data['model'])) {
-                    $product = Product::where('model', $data['model'])->first();
+                if (! $product && $model !== '') {
+                    $product = Product::where('model', $model)->first();
                 }
 
                 $productData = [
-                    'name' => $data['name'] ?? '',
+                    'name' => trim((string) ($data['name'] ?? '')),
                     'sku' => $sku ?: null,
                     'ean' => $ean ?: null,
-                    'brand' => $data['brand'] ?? null,
-                    'product_url' => $data['product_url'] ?? null,
-                    'is_active' => isset($data['is_active']) ? (int)$data['is_active'] : 1,
+                    'brand' => trim((string) ($data['brand'] ?? '')) ?: null,
+                    'product_url' => trim((string) ($data['product_url'] ?? '')) ?: null,
+                    'is_active' => isset($data['is_active'])
+                        ? (int) $data['is_active']
+                        : 1,
                 ];
 
-                // 🔥 PRICE + RETRY
+                if ($model !== '') {
+                    $productData['model'] = $model;
+                }
+
                 $price = $this->getPriceWithRetry($productData['product_url']);
 
                 if ($price === null) {
@@ -65,15 +76,13 @@ class ProductsImport implements ToCollection
                     $product = Product::create($productData);
                 }
 
-                // 🔥 AUTO FLOW
-                Artisan::call('products:auto-search', [
-                    'product_id' => $product->id,
-                ]);
+                AutoSearchProductJob::dispatch($product->id)
+                    ->onQueue('search')
+                    ->delay(now()->addSeconds(1));
 
-                Artisan::call('prices:check', [
-                    'product_id' => $product->id,
-                ]);
-
+                PriceCheckProductJob::dispatch($product->id)
+                    ->onQueue('price')
+                    ->delay(now()->addSeconds(5));
             } catch (\Throwable $e) {
                 Log::error('Import error', [
                     'row' => $row,
@@ -85,12 +94,13 @@ class ProductsImport implements ToCollection
 
     private function getPriceWithRetry(?string $url): ?float
     {
-        if (!$url) return null;
+        if (! $url) {
+            return null;
+        }
 
         for ($i = 0; $i < 3; $i++) {
             try {
-                $price = app(\App\Http\Controllers\ProductController::class)
-                    ->fetchOwnPriceFromUrl($url);
+                $price = app(OwnProductPriceService::class)->getPrice($url);
 
                 if ($price !== null) {
                     return $price;

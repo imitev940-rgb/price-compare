@@ -14,4 +14,14 @@ Artisan::command('inspire', function () {
 |--------------------------------------------------------------------------
 */
 
-Schedule::command('prices:check')->everyFiveMinutes();
+Schedule::command('prices:dispatch-due')
+    ->name('prices.dispatch_due')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('price-history:cleanup 90')
+    ->name('price_history.cleanup')
+    ->daily()
+    ->withoutOverlapping()
+    ->runInBackground();
