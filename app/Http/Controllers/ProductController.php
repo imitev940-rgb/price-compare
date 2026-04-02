@@ -75,9 +75,15 @@ class ProductController extends Controller
             AutoSearchProductJob::dispatch($product->id)
                 ->onQueue('search');
 
+            // 🔥 TOP / NORMAL queue логика
+            $priceQueue = ($product->scan_priority ?? 'normal') === 'top'
+                ? 'price_top'
+                : 'price';
+
             PriceCheckProductJob::dispatch($product->id)
                 ->delay(now()->addMinutes(2))
-                ->onQueue('price');
+                ->onQueue($priceQueue);
+
         } catch (\Throwable $e) {
             Log::error('Auto search / price check dispatch failed after create', [
                 'product_id' => $product->id,
@@ -133,9 +139,15 @@ class ProductController extends Controller
             AutoSearchProductJob::dispatch($product->id)
                 ->onQueue('search');
 
+            // 🔥 TOP / NORMAL queue логика
+            $priceQueue = ($product->scan_priority ?? 'normal') === 'top'
+                ? 'price_top'
+                : 'price';
+
             PriceCheckProductJob::dispatch($product->id)
                 ->delay(now()->addMinutes(2))
-                ->onQueue('price');
+                ->onQueue($priceQueue);
+
         } catch (\Throwable $e) {
             Log::error('Auto search / price check dispatch failed after update', [
                 'product_id' => $product->id,
