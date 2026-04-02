@@ -186,7 +186,6 @@ class AutoProductSearchService
                             continue;
                         }
 
-                        // Проверка — моделът трябва да е в URL-а
                         if ($primary || $sku) {
                             $identifier = $primary ?: $sku;
                             $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower($u));
@@ -251,7 +250,6 @@ class AutoProductSearchService
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            // Fallback проверка
             if ($primary || $sku) {
                 $identifier = $primary ?: $sku;
                 $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower($bestUrl));
@@ -353,12 +351,21 @@ class AutoProductSearchService
         $sku     = trim((string) ($product->sku ?? ''));
 
         foreach (array_slice($this->buildProgressiveQueries($product), 0, 16) as $query) {
-            $html = $this->fetchHtml(
-                'https://www.technomarket.bg/search?query=' . urlencode($query),
-                'https://www.technomarket.bg/'
-            );
+            $searchUrl = 'https://www.technomarket.bg/search?query=' . urlencode($query);
+
+            Log::debug('Technomarket search request', [
+                'product_id' => $product->id,
+                'query'      => $query,
+                'url'        => $searchUrl,
+            ]);
+
+            $html = $this->fetchHtml($searchUrl, 'https://www.technomarket.bg/');
 
             if (! $html) {
+                Log::debug('Technomarket search empty html', [
+                    'product_id' => $product->id,
+                    'query'      => $query,
+                ]);
                 continue;
             }
 
@@ -376,7 +383,6 @@ class AutoProductSearchService
                         continue;
                     }
 
-                    // Проверка по URL — моделът трябва да съвпада точно или truncated
                     if ($primary || $sku) {
                         $identifier = $primary ?: $sku;
                         $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($u, PHP_URL_PATH) ?? '')));
@@ -439,8 +445,23 @@ class AutoProductSearchService
             }
         }
 
+        $googleUrl = $this->searchViaGoogle($product, 'technomarket.bg');
+        if ($googleUrl) {
+            $pageHtml = $this->fetchHtml($googleUrl, 'https://www.technomarket.bg/');
+            [$ps] = $this->computeMatchScore($googleUrl, (string) $pageHtml, $product);
+
+            Log::info('Technomarket Google fallback candidate', [
+                'product_id' => $product->id,
+                'url'        => $googleUrl,
+                'score'      => $ps,
+            ]);
+
+            if ($ps >= self::SCORE_FALLBACK) {
+                return $googleUrl;
+            }
+        }
+
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            // Fallback проверка — същата логика
             if ($primary || $sku) {
                 $identifier = $primary ?: $sku;
                 $uSlug      = preg_replace('/[^a-z0-9]/', '', mb_strtolower(basename(parse_url($bestUrl, PHP_URL_PATH) ?? '')));
@@ -495,9 +516,10 @@ class AutoProductSearchService
         $hardBlock = ['/cart', '/wishlist', '/account', '/checkout', '/search', '/category', '/brand', '/filter'];
         $imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.pdf'];
 
-        preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m);
+        preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m1);
+        preg_match_all('/"url"\s*:\s*"([^"]+)"/i', $html, $m2);
 
-        foreach (($m[1] ?? []) as $href) {
+        foreach (array_merge($m1[1] ?? [], $m2[1] ?? []) as $href) {
             $href = html_entity_decode(trim((string) $href), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
             if ($href === '') {
@@ -540,6 +562,15 @@ class AutoProductSearchService
                 continue;
             }
 
+            $slug = trim((string) basename($path), '/');
+            if ($slug === '') {
+                continue;
+            }
+
+            if (! preg_match('/\d/', $slug) && ! preg_match('/[a-z]{2,}\d{2,}/i', $slug)) {
+                continue;
+            }
+
             if (! isset($seen[$abs])) {
                 $seen[$abs] = true;
                 $urls[] = $abs;
@@ -558,10 +589,6 @@ class AutoProductSearchService
         $bestUrl   = null;
         $bestScore = -999;
 
-        // Techmart няма работеща търсачка — само direct slugs и Google
-        // ------------------------------------------------
-        // 1) DIRECT SLUG CANDIDATES
-        // ------------------------------------------------
         foreach ($this->buildTechmartDirectCandidates($product) as $u) {
             $pageHtml = $this->fetchHtml($u, 'https://techmart.bg/');
             if (! $pageHtml) {
@@ -593,9 +620,6 @@ class AutoProductSearchService
             }
         }
 
-        // ------------------------------------------------
-        // 3) GOOGLE FALLBACK
-        // ------------------------------------------------
         $googleUrl = $this->searchViaGoogle($product, 'techmart.bg');
         if ($googleUrl) {
             $pageHtml = $this->fetchHtml($googleUrl, 'https://techmart.bg/');
@@ -625,9 +649,6 @@ class AutoProductSearchService
         return null;
     }
 
-    // ----------------------------------------------------------------
-    // FIX #1: ЛИПСВАШЕ — sanitizeTechmartSearchTerm
-    // ----------------------------------------------------------------
     protected function sanitizeTechmartSearchTerm(string $query): string
     {
         $query = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $query);
@@ -636,9 +657,6 @@ class AutoProductSearchService
         return $query;
     }
 
-    // ----------------------------------------------------------------
-    // FIX #2: ЛИПСВАШЕ — extractTechmartProductUrls
-    // ----------------------------------------------------------------
     protected function extractTechmartProductUrls(string $html): array
     {
         $urls      = [];
@@ -651,7 +669,7 @@ class AutoProductSearchService
 
         preg_match_all('/href=["\']([^"\']+)["\']/i', $html, $m1);
         preg_match_all('/"permalink"\s*:\s*"([^"]+)"/i', $html, $m2);
-        preg_match_all('/"url"\s*:\s*"([^"]+)"/i',       $html, $m3);
+        preg_match_all('/"url"\s*:\s*"([^"]+)"/i', $html, $m3);
 
         foreach (array_merge($m1[1] ?? [], $m2[1] ?? [], $m3[1] ?? []) as $href) {
             $href = str_replace('\/', '/', (string) $href);
@@ -741,7 +759,7 @@ class AutoProductSearchService
 
         $prefixes = [
             'furna-za-vgrazhdane', 'furna',
-            'mikrovylnova-furna', 'mikrovylnova',
+            'mikrovylnova-za-vgrazhdane', 'mikrovylnova-furna', 'mikrovylnova',
             'plot-za-vgrazhdane', 'plot',
             'induktsen-plot', 'elektricheski-plot',
             'sydomiqlna-za-vgrazhdane', 'sydomiqlna-45sm',
@@ -759,13 +777,15 @@ class AutoProductSearchService
             'air-fryer', 'friturnik',
             'epilator', 'seshhoar', 'shteker',
             'mikser', 'blender', 'kuhnenski-robot',
-            'toster', 'skara', 'uред',
+            'toster', 'skara', 'ured',
             'monitor', 'printer', 'skaner',
         ];
 
         foreach ($prefixes as $prefix) {
             foreach ($skuVariants as $skuV) {
-                if ($skuV === '') continue;
+                if ($skuV === '') {
+                    continue;
+                }
                 if ($brandSlug) {
                     $add($prefix . '-' . $brandSlug . '-' . $skuV);
                 }
@@ -778,7 +798,9 @@ class AutoProductSearchService
         }
 
         foreach ($skuVariants as $skuV) {
-            if ($skuV === '') continue;
+            if ($skuV === '') {
+                continue;
+            }
             if ($brandSlug) {
                 $add($brandSlug . '-' . $skuV);
             }
@@ -792,9 +814,13 @@ class AutoProductSearchService
 
         foreach ($prefixes as $prefix) {
             foreach ($skuVariants as $skuV) {
-                if ($skuV === '') continue;
+                if ($skuV === '') {
+                    continue;
+                }
                 foreach ($nameTokens as $token) {
-                    if ($token === $skuV || $token === $brandSlug) continue;
+                    if ($token === $skuV || $token === $brandSlug) {
+                        continue;
+                    }
                     if ($brandSlug) {
                         $add($prefix . '-' . $brandSlug . '-' . $skuV . '-' . $token);
                     }
@@ -845,7 +871,9 @@ class AutoProductSearchService
 
         $extraQueries = [];
         foreach ([$primary, $sku] as $id) {
-            if (! $id) continue;
+            if (! $id) {
+                continue;
+            }
             $flat = preg_replace('/[^A-Z0-9]/', '', $this->normalizeIdentifier($id));
             for ($len = min(strlen($flat), 7); $len >= 4; $len--) {
                 $extraQueries[] = trim((string) $product->brand) . ' ' . substr($flat, 0, $len);
@@ -1577,7 +1605,7 @@ class AutoProductSearchService
     }
 
     // ================================================================
-    // FIX: fetchHtml — shell curl за Techmart, Laravel Http за останалите
+    // FETCH HTML
     // ================================================================
 
     protected function fetchHtml(string $url, string $referer = ''): ?string
@@ -1586,8 +1614,13 @@ class AutoProductSearchService
             return $this->fetchHtmlShell($url, $referer ?: 'https://techmart.bg/');
         }
 
+        if (str_contains($url, 'technomarket.bg')) {
+            return $this->fetchHtmlShell($url, $referer ?: 'https://www.technomarket.bg/');
+        }
+
         try {
-            $resp = Http::timeout(20)
+            $resp = Http::timeout(25)
+                ->retry(2, 1200)
                 ->withoutVerifying()
                 ->withOptions([
                     'curl' => [
@@ -1604,7 +1637,8 @@ class AutoProductSearchService
                     'status' => $resp->status(),
                 ]);
 
-                $resp = Http::timeout(20)
+                $resp = Http::timeout(25)
+                    ->retry(1, 1500)
                     ->withoutVerifying()
                     ->withOptions([
                         'curl' => [
@@ -1621,7 +1655,12 @@ class AutoProductSearchService
             }
 
             return $resp->body();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::debug('fetchHtml failed', [
+                'url'     => $url,
+                'message' => $e->getMessage(),
+            ]);
+
             return null;
         }
     }
@@ -1629,7 +1668,9 @@ class AutoProductSearchService
     protected function fetchHtmlShell(string $url, string $referer = ''): ?string
     {
         $cmd = sprintf(
-            'curl -sk -L --max-time 20 ' .
+            'curl -sk -L --max-time 30 ' .
+            '--connect-timeout 10 ' .
+            '--retry 2 --retry-delay 1 ' .
             '-H %s ' .
             '-H %s ' .
             '-H %s ' .
@@ -1639,7 +1680,7 @@ class AutoProductSearchService
             escapeshellarg('User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'),
             escapeshellarg('Accept-Language: bg-BG,bg;q=0.9,en;q=0.8'),
             escapeshellarg('Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'),
-            escapeshellarg('Referer: ' . ($referer ?: 'https://techmart.bg/')),
+            escapeshellarg('Referer: ' . ($referer ?: $url)),
             escapeshellarg($url)
         );
 
@@ -1650,6 +1691,10 @@ class AutoProductSearchService
         $body   = (string) preg_replace('/HTTPSTATUS:\d+$/', '', $output);
 
         if ($status < 200 || $status >= 300 || trim($body) === '') {
+            Log::debug('fetchHtmlShell failed', [
+                'url'    => $url,
+                'status' => $status,
+            ]);
             return null;
         }
 
@@ -1750,6 +1795,7 @@ class AutoProductSearchService
         if (Str::startsWith($url, ['http://', 'https://'])) {
             return $url;
         }
+
         return rtrim($base, '/') . '/' . ltrim($url, '/');
     }
 
