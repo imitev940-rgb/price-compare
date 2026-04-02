@@ -416,6 +416,17 @@ class AutoProductSearchService
                             ]);
                             continue;
                         }
+
+                        // GOOGLE FALLBACK
+$googleUrl = $this->searchViaGoogle($product, 'technomarket.bg');
+if ($googleUrl) {
+    Log::info('Technomarket found via Google', [
+        'product_id' => $product->id,
+        'url'        => $googleUrl,
+    ]);
+
+    return $googleUrl;
+}
                     }
 
                     [$ps, $why] = $this->computeMatchScore($u, $pageHtml, $product);
