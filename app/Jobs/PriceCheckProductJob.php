@@ -11,7 +11,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Console\Output\NullOutput;
 
 class PriceCheckProductJob implements ShouldQueue
 {
@@ -60,8 +59,12 @@ class PriceCheckProductJob implements ShouldQueue
                 return;
             }
 
-            $command = app(\App\Console\Commands\CheckCompetitorPrices::class);
-            $command->setOutput(new NullOutput());
+            $command = new \App\Console\Commands\CheckCompetitorPrices();
+            $command->setLaravel(app());
+            $command->setOutput(new \Illuminate\Console\OutputStyle(
+                new \Symfony\Component\Console\Input\ArrayInput([]),
+                new \Symfony\Component\Console\Output\NullOutput()
+            ));
 
             foreach ($links as $link) {
                 try {
