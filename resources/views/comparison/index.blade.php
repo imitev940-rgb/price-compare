@@ -124,6 +124,12 @@
 
                     <option value="tehnomix_diff_percent_asc" {{ request('sort') === 'tehnomix_diff_percent_asc' ? 'selected' : '' }}>Tehnomix Diff % Low → High</option>
                     <option value="tehnomix_diff_percent_desc" {{ request('sort') === 'tehnomix_diff_percent_desc' ? 'selected' : '' }}>Tehnomix Diff % High → Low</option>
+
+                    <option value="zora_diff_asc" {{ request('sort') === 'zora_diff_asc' ? 'selected' : '' }}>Zora Diff € Low → High</option>
+                    <option value="zora_diff_desc" {{ request('sort') === 'zora_diff_desc' ? 'selected' : '' }}>Zora Diff € High → Low</option>
+
+                    <option value="zora_diff_percent_asc" {{ request('sort') === 'zora_diff_percent_asc' ? 'selected' : '' }}>Zora Diff % Low → High</option>
+                    <option value="zora_diff_percent_desc" {{ request('sort') === 'zora_diff_percent_desc' ? 'selected' : '' }}>Zora Diff % High → Low</option>
                 </select>
             </div>
 
@@ -148,13 +154,6 @@
         </div>
 
         <div class="cmp-toolbar-side">
-            <a href="{{ route('comparison.export.csv', request()->query()) }}"
-               class="cmp-toolbar-icon"
-               title="Export CSV"
-               aria-label="Export CSV">
-                <i data-lucide="file-text"></i>
-            </a>
-
             <a href="{{ route('comparison.export.excel', request()->query()) }}"
                class="cmp-toolbar-icon"
                title="Export Excel"
@@ -194,20 +193,24 @@
 
                 <div id="columnsMenu" class="cmp-columns-menu">
                     <label><input type="checkbox" data-col="technopolis" checked> Technopolis</label>
-                    <label><input type="checkbox" data-col="technopolis_diff_euro" checked> TP Diff €</label>
-                    <label><input type="checkbox" data-col="technopolis_diff_percent" checked> TP Diff %</label>
+                    <label><input type="checkbox" data-col="technopolis_diff_euro"> TP Diff €</label>
+                    <label><input type="checkbox" data-col="technopolis_diff_percent"> TP Diff %</label>
 
                     <label><input type="checkbox" data-col="technomarket" checked> Technomarket</label>
-                    <label><input type="checkbox" data-col="technomarket_diff_euro" checked> TM Diff €</label>
-                    <label><input type="checkbox" data-col="technomarket_diff_percent" checked> TM Diff %</label>
+                    <label><input type="checkbox" data-col="technomarket_diff_euro"> TM Diff €</label>
+                    <label><input type="checkbox" data-col="technomarket_diff_percent"> TM Diff %</label>
 
                     <label><input type="checkbox" data-col="techmart" checked> Techmart</label>
-                    <label><input type="checkbox" data-col="techmart_diff_euro" checked> Techmart Diff €</label>
-                    <label><input type="checkbox" data-col="techmart_diff_percent" checked> Techmart Diff %</label>
+                    <label><input type="checkbox" data-col="techmart_diff_euro"> Techmart Diff €</label>
+                    <label><input type="checkbox" data-col="techmart_diff_percent"> Techmart Diff %</label>
 
                     <label><input type="checkbox" data-col="tehnomix" checked> Tehnomix</label>
-                    <label><input type="checkbox" data-col="tehnomix_diff_euro" checked> Tehnomix Diff €</label>
-                    <label><input type="checkbox" data-col="tehnomix_diff_percent" checked> Tehnomix Diff %</label>
+                    <label><input type="checkbox" data-col="tehnomix_diff_euro"> Tehnomix Diff €</label>
+                    <label><input type="checkbox" data-col="tehnomix_diff_percent"> Tehnomix Diff %</label>
+
+                    <label><input type="checkbox" data-col="zora" checked> Zora</label>
+                    <label><input type="checkbox" data-col="zora_diff_euro"> Zora Diff €</label>
+                    <label><input type="checkbox" data-col="zora_diff_percent"> Zora Diff %</label>
 
                     <label><input type="checkbox" data-col="pazaruvaj" checked> Pazaruvaj</label>
                     <label><input type="checkbox" data-col="lowest" checked> Lowest</label>
@@ -241,24 +244,29 @@
 
                 <th class="col-our_price">Our Price</th>
 
-                <th class="col-technopolis">Techno<br>polis</th>
+                <th class="col-lowest">Lowest <span class="col-lowest-info" id="lowestInfoTh" title="Показва най-ниската цена и магазина">ℹ</span></th>
+
+                <th class="col-technopolis">ТП</th>
                 <th class="col-technopolis_diff_euro">TP Diff €</th>
                 <th class="col-technopolis_diff_percent">TP Diff %</th>
 
-                <th class="col-technomarket">Techno<br>Market</th>
+                <th class="col-technomarket">ТМЕ</th>
                 <th class="col-technomarket_diff_euro">TM Diff €</th>
                 <th class="col-technomarket_diff_percent">TM Diff %</th>
 
-                <th class="col-techmart">Tech<br>mart</th>
+                <th class="col-techmart">THM</th>
                 <th class="col-techmart_diff_euro">Techmart Diff €</th>
                 <th class="col-techmart_diff_percent">Techmart Diff %</th>
 
-                <th class="col-tehnomix">Tehno<br>mix</th>
+                <th class="col-tehnomix">ТМХ</th>
                 <th class="col-tehnomix_diff_euro">Tehnomix Diff €</th>
                 <th class="col-tehnomix_diff_percent">Tehnomix Diff %</th>
 
+                <th class="col-zora">Zora</th>
+                <th class="col-zora_diff_euro">Zora Diff €</th>
+                <th class="col-zora_diff_percent">Zora Diff %</th>
+
                 <th class="col-pazaruvaj">Pazaruvaj</th>
-                <th class="col-lowest">Lowest</th>
                 <th class="col-offers">Offers</th>
                 <th class="col-position">Position</th>
                 <th class="col-diff">Diff €</th>
@@ -279,6 +287,17 @@
                     <td class="cmp-price col-our_price">
                         @if($product->our_price !== null)
                             {{ number_format((float) $product->our_price, 2) }}
+                        @else
+                            —
+                        @endif
+                    </td>
+
+                    <td class="cmp-price col-lowest">
+                        @if($product->lowest_market_price !== null)
+                            <span class="cmp-lowest-price-text">{{ number_format((float) $product->lowest_market_price, 2) }}</span>
+                            @if($product->pazaruvaj_lowest_store ?? null)
+                                <span class="lowest-store-info" data-store="{{ $product->pazaruvaj_lowest_store ?? '' }}" onclick="showStoreTooltip(event, this)">ℹ</span>
+                            @endif
                         @else
                             —
                         @endif
@@ -412,25 +431,45 @@
                         @endif
                     </td>
 
-                    <td class="cmp-price col-pazaruvaj">
-                        @if($product->pazaruvaj_lowest_price !== null)
-                            {{ number_format((float) $product->pazaruvaj_lowest_price, 2) }}
+                    <td class="cmp-price col-zora">
+                        @if($product->zora_price !== null)
+                            {{ number_format((float) $product->zora_price, 2) }}
                         @else
                             —
                         @endif
                     </td>
 
-                    <td class="cmp-price col-lowest">
-                        @if($product->lowest_market_price !== null)
-                            <span class="cmp-lowest-price-text">
-                                {{ number_format((float) $product->lowest_market_price, 2) }}
+                    <td class="col-zora_diff_euro">
+                        @if($product->zora_diff_euro !== null)
+                            @php $d = (float) $product->zora_diff_euro; @endphp
+                            <span class="cmp-diff-chip {{ $d < 0 ? 'up' : ($d > 0 ? 'down' : 'flat') }}">
+                                <span class="cmp-diff-arrow">{{ $d < 0 ? '↑' : ($d > 0 ? '↓' : '•') }}</span>
+                                {{ number_format(abs($d), 2) }}
                             </span>
                         @else
                             —
                         @endif
                     </td>
 
-                    <td class="col-offers">
+                    <td class="col-zora_diff_percent">
+                        @if($product->zora_diff_percent !== null)
+                            @php $p = (float) $product->zora_diff_percent; @endphp
+                            <span class="cmp-diff-chip {{ $p < 0 ? 'up' : ($p > 0 ? 'down' : 'flat') }}">
+                                <span class="cmp-diff-arrow">{{ $p < 0 ? '↑' : ($p > 0 ? '↓' : '•') }}</span>
+                                {{ number_format(abs($p), 1) }}%
+                            </span>
+                        @else
+                            —
+                        @endif
+                    </td>
+
+                    <td class="cmp-price col-pazaruvaj">
+                        @if($product->pazaruvaj_lowest_price !== null)
+                            {{ number_format((float) $product->pazaruvaj_lowest_price, 2) }}
+                        @else
+                            —
+                        @endif
+                    </td><td class="col-offers">
                         <span class="cmp-offers-count-pill">
                             {{ $product->pazaruvaj_offers_count ?? 0 }}
                         </span>
@@ -486,7 +525,7 @@
 
                 @if(($product->pazaruvaj_offers_list ?? collect())->count() > 0)
                     <tr class="cmp-offers-row">
-                        <td colspan="21">
+                        <td colspan="24">
                             <div id="offers-{{ $product->id }}" class="cmp-offers-panel">
                                 <div class="cmp-offers-headline">
                                     <div class="cmp-offers-title">
@@ -586,7 +625,7 @@
                 @endif
             @empty
                 <tr>
-                    <td colspan="21" style="text-align:center;">No products found.</td>
+                    <td colspan="24" style="text-align:center;">No products found.</td>
                 </tr>
             @endforelse
         </tbody>
@@ -618,12 +657,24 @@
         });
     }
 
+    const DIFF_COLS_HIDDEN_BY_DEFAULT = [
+        'technopolis_diff_euro','technopolis_diff_percent',
+        'technomarket_diff_euro','technomarket_diff_percent',
+        'techmart_diff_euro','techmart_diff_percent',
+        'tehnomix_diff_euro','tehnomix_diff_percent',
+        'zora_diff_euro','zora_diff_percent',
+    ];
+
     function reapplySavedColumnVisibility() {
         document.querySelectorAll('#columnsMenu input[data-col]').forEach(cb => {
             const col = cb.dataset.col;
             const saved = localStorage.getItem('col-' + col);
 
-            if (saved === 'false') {
+            if (saved !== null) {
+                const show = saved !== 'false';
+                cb.checked = show;
+                setColumnVisibility(col, show);
+            } else if (DIFF_COLS_HIDDEN_BY_DEFAULT.includes(col)) {
                 cb.checked = false;
                 setColumnVisibility(col, false);
             } else {
@@ -667,6 +718,7 @@
         }
 
         initResizableComparisonTable();
+        initColumnDragDrop();
         syncStickyOffsets();
 
         window.addEventListener('resize', syncStickyOffsets);
@@ -687,9 +739,6 @@
 
         document.querySelectorAll('#comparisonResizableTable th.col-product, #comparisonResizableTable td.col-product').forEach(el => {
             el.style.left = '0px';
-            el.style.minWidth = productWidth + 'px';
-            el.style.width = productWidth + 'px';
-            el.style.maxWidth = productWidth + 'px';
         });
     }
 
@@ -700,7 +749,7 @@
         const headers = table.querySelectorAll('thead th');
         if (!headers.length) return;
 
-        const storageKey = 'comparison-resizable-widths-v3';
+        const storageKey = 'comparison-resizable-widths-v4';
 
         headers.forEach((th, index) => {
             th.dataset.colIndex = index;
@@ -729,6 +778,8 @@
                 header.classList.contains('col-techmart_diff_percent') ||
                 header.classList.contains('col-tehnomix_diff_euro') ||
                 header.classList.contains('col-tehnomix_diff_percent') ||
+                header.classList.contains('col-zora_diff_euro') ||
+                header.classList.contains('col-zora_diff_percent') ||
                 header.classList.contains('col-diff') ||
                 header.classList.contains('col-diff_percent')
             ) return 110;
@@ -871,6 +922,86 @@
         loadWidths();
         syncStickyOffsets();
     }
+
+
+    // ── Store Tooltip ─────────────────────────────────────────────────────────
+    function showStoreTooltip(e, el) {
+        e.stopPropagation();
+        document.querySelectorAll('.store-tooltip-popup').forEach(t => t.remove());
+        const store = el.dataset.store;
+        if (!store) return;
+        const tip = document.createElement('div');
+        tip.className = 'store-tooltip-popup';
+        tip.textContent = store;
+        tip.style.cssText = 'position:fixed;background:#1e293b;color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;z-index:9999;pointer-events:none;white-space:nowrap;';
+        document.body.appendChild(tip);
+        const rect = el.getBoundingClientRect();
+        tip.style.left = (rect.left + rect.width/2 - tip.offsetWidth/2) + 'px';
+        tip.style.top = (rect.top - tip.offsetHeight - 4) + 'px';
+        setTimeout(() => tip.remove(), 2500);
+    }
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.store-tooltip-popup').forEach(t => t.remove());
+    });
+
+    // ── Drag & Drop Column Reorder ────────────────────────────────────────────
+    let dragSrcIndex = null;
+
+    function initColumnDragDrop() {
+        const table = document.getElementById('comparisonResizableTable');
+        if (!table) return;
+        const headers = table.querySelectorAll('thead th');
+
+        headers.forEach((th, index) => {
+            if (th.classList.contains('col-toggle')) return;
+
+            th.setAttribute('draggable', 'true');
+            th.style.cursor = 'grab';
+
+            th.addEventListener('dragstart', (e) => {
+                dragSrcIndex = index;
+                th.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            th.addEventListener('dragend', () => {
+                th.classList.remove('dragging');
+                headers.forEach(h => h.classList.remove('drag-over'));
+            });
+
+            th.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                headers.forEach(h => h.classList.remove('drag-over'));
+                th.classList.add('drag-over');
+            });
+
+            th.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (dragSrcIndex === null || dragSrcIndex === index) return;
+
+                const rows = table.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cells = Array.from(row.children);
+                    if (cells.length <= Math.max(dragSrcIndex, index)) return;
+
+                    const draggedCell = cells[dragSrcIndex];
+                    const targetCell  = cells[index];
+
+                    if (dragSrcIndex < index) {
+                        row.insertBefore(draggedCell, targetCell.nextSibling);
+                    } else {
+                        row.insertBefore(draggedCell, targetCell);
+                    }
+                });
+
+                dragSrcIndex = null;
+                headers.forEach(h => h.classList.remove('drag-over'));
+                syncStickyOffsets();
+            });
+        });
+    }
+
 </script>
 
 </div>
@@ -970,9 +1101,8 @@
 }
 
 .comparison-page-only .col-product {
-    width: 280px;
-    min-width: 280px;
-    max-width: 280px;
+    width: 220px;
+    min-width: 180px;
 }
 
 .comparison-page-only .cmp-product-link {
@@ -991,6 +1121,7 @@
 .comparison-page-only .col-technomarket,
 .comparison-page-only .col-techmart,
 .comparison-page-only .col-tehnomix,
+.comparison-page-only .col-zora,
 .comparison-page-only .col-pazaruvaj,
 .comparison-page-only .col-lowest {
     width: 120px;
@@ -1005,6 +1136,8 @@
 .comparison-page-only .col-techmart_diff_percent,
 .comparison-page-only .col-tehnomix_diff_euro,
 .comparison-page-only .col-tehnomix_diff_percent,
+.comparison-page-only .col-zora_diff_euro,
+.comparison-page-only .col-zora_diff_percent,
 .comparison-page-only .col-diff,
 .comparison-page-only .col-diff_percent {
     width: 110px;
@@ -1142,105 +1275,29 @@
     scrollbar-width: thin;
 }
 
-.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar {
-    height: 12px;
-    width: 12px;
-}
-
-.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-track {
-    background: #0b1220;
-    border-radius: 999px;
-}
-
-.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-thumb {
-    background: #223a5e;
-    border-radius: 999px;
-    border: 2px solid #0b1220;
-}
-
-.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-thumb:hover {
-    background: #2f5ea8;
-}
-
-.dark .comparison-page-only .cmp-table {
-    background: #0f172a !important;
-}
-
-.dark .comparison-page-only .cmp-table thead th {
-    background: #111c34 !important;
-    color: #94a3b8 !important;
-    box-shadow: inset 0 -1px 0 #22304d !important;
-}
-
-.dark .comparison-page-only .cmp-table tbody td {
-    background: #0f172a !important;
-    border-top: 1px solid #22304d !important;
-    color: #e5e7eb !important;
-}
-
+.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
+.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-track { background: #0b1220; border-radius: 999px; }
+.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-thumb { background: #223a5e; border-radius: 999px; border: 2px solid #0b1220; }
+.dark .comparison-page-only .cmp-table-wrap::-webkit-scrollbar-thumb:hover { background: #2f5ea8; }
+.dark .comparison-page-only .cmp-table { background: #0f172a !important; }
+.dark .comparison-page-only .cmp-table thead th { background: #111c34 !important; color: #94a3b8 !important; box-shadow: inset 0 -1px 0 #22304d !important; }
+.dark .comparison-page-only .cmp-table tbody td { background: #0f172a !important; border-top: 1px solid #22304d !important; color: #e5e7eb !important; }
 .dark .comparison-page-only .cmp-table th.col-product,
-.dark .comparison-page-only .cmp-table td.col-product {
-    background: #0f172a !important;
-    color: #e5e7eb !important;
-    box-shadow: inset -1px 0 0 #22304d !important;
-}
-
-.dark .comparison-page-only .cmp-table thead th.col-product {
-    background: #111c34 !important;
-}
-
+.dark .comparison-page-only .cmp-table td.col-product { background: #0f172a !important; color: #e5e7eb !important; box-shadow: inset -1px 0 0 #22304d !important; }
+.dark .comparison-page-only .cmp-table thead th.col-product { background: #111c34 !important; }
 .dark .comparison-page-only .cmp-table tbody tr:hover td,
-.dark .comparison-page-only .cmp-table tbody tr:hover td.col-product {
-    background: #13203a !important;
-}
-
+.dark .comparison-page-only .cmp-table tbody tr:hover td.col-product { background: #13203a !important; }
 .dark .comparison-page-only .cmp-offers-row td,
-.dark .comparison-page-only .cmp-offers-panel {
-    background: #0f172a !important;
-    color: #e5e7eb !important;
-}
-
-.dark .comparison-page-only .cmp-product-link {
-    color: #a5b4fc !important;
-}
-
-.dark .comparison-page-only .cmp-toolbar-reset-icon {
-    border-color: #22304d !important;
-    background: #111c34 !important;
-    color: #e5e7eb !important;
-}
-
-.dark .comparison-page-only .cmp-toolbar-reset-icon:hover {
-    background: #16233d !important;
-    border-color: #2f4670 !important;
-}
-
-.dark .comparison-page-only .cmp-arrow-btn {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
-}
-
-.dark .comparison-page-only .cmp-arrow-btn:hover {
-    background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
-    color: #ffffff !important;
-}
-
-.dark .comparison-page-only .cmp-arrow-btn.active {
-    background: linear-gradient(135deg, #3b82f6, #60a5fa) !important;
-    color: #ffffff !important;
-    border-color: transparent !important;
-}
-
-.dark .comparison-page-only .cmp-col-resize-handle::after {
-    background: rgba(96, 165, 250, 0.35) !important;
-}
-
+.dark .comparison-page-only .cmp-offers-panel { background: #0f172a !important; color: #e5e7eb !important; }
+.dark .comparison-page-only .cmp-product-link { color: #a5b4fc !important; }
+.dark .comparison-page-only .cmp-toolbar-reset-icon { border-color: #22304d !important; background: #111c34 !important; color: #e5e7eb !important; }
+.dark .comparison-page-only .cmp-toolbar-reset-icon:hover { background: #16233d !important; border-color: #2f4670 !important; }
+.dark .comparison-page-only .cmp-arrow-btn { background: linear-gradient(135deg, #1d4ed8, #2563eb) !important; color: #ffffff !important; border: 1px solid rgba(255,255,255,0.08) !important; box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important; }
+.dark .comparison-page-only .cmp-arrow-btn:hover { background: linear-gradient(135deg, #2563eb, #3b82f6) !important; color: #ffffff !important; }
+.dark .comparison-page-only .cmp-arrow-btn.active { background: linear-gradient(135deg, #3b82f6, #60a5fa) !important; color: #ffffff !important; border-color: transparent !important; }
+.dark .comparison-page-only .cmp-col-resize-handle::after { background: rgba(96, 165, 250, 0.35) !important; }
 .dark .comparison-page-only .cmp-resizable-table thead th:hover .cmp-col-resize-handle::after,
-.dark .comparison-page-only .cmp-resizable-table th.is-resizing .cmp-col-resize-handle::after {
-    background: rgba(96, 165, 250, 0.95) !important;
-}
+.dark .comparison-page-only .cmp-resizable-table th.is-resizing .cmp-col-resize-handle::after { background: rgba(96, 165, 250, 0.95) !important; }
 
 /* FORCE DARK */
 .dark .comparison-page-only .cmp-table-wrap,
@@ -1248,182 +1305,54 @@
 .dark .comparison-page-only .cmp-table thead th,
 .dark .comparison-page-only .cmp-table tbody td,
 .dark .comparison-page-only .cmp-offers-row td,
-.dark .comparison-page-only .cmp-offers-panel {
-    background-color: #0f172a !important;
-    color: #e5e7eb !important;
-}
-
-.dark .comparison-page-only .cmp-table thead th {
-    background-color: #111c34 !important;
-    color: #94a3b8 !important;
-}
-
+.dark .comparison-page-only .cmp-offers-panel { background-color: #0f172a !important; color: #e5e7eb !important; }
+.dark .comparison-page-only .cmp-table thead th { background-color: #111c34 !important; color: #94a3b8 !important; }
 .dark .comparison-page-only .cmp-table th.col-product,
-.dark .comparison-page-only .cmp-table td.col-product {
-    background-color: #0f172a !important;
-    color: #e5e7eb !important;
-    box-shadow: inset -1px 0 0 #22304d !important;
-}
+.dark .comparison-page-only .cmp-table td.col-product { background-color: #0f172a !important; color: #e5e7eb !important; box-shadow: inset -1px 0 0 #22304d !important; }
+.dark .comparison-page-only .cmp-table thead th.col-product { background-color: #111c34 !important; }
 
-.dark .comparison-page-only .cmp-table thead th.col-product {
-    background-color: #111c34 !important;
-}
 /* CENTER ALL TABLE CELLS */
 .comparison-page-only .cmp-table th,
-.comparison-page-only .cmp-table td {
-    text-align: center;
-    vertical-align: middle;
-}
-
-/* KEEP PRODUCT COLUMN LEFT */
+.comparison-page-only .cmp-table td { text-align: center; vertical-align: middle; }
 .comparison-page-only .cmp-table th.col-product,
-.comparison-page-only .cmp-table td.col-product {
-    text-align: left;
-}
-
-/* CENTER CONTENT INSIDE PRICE/DIFF CELLS */
+.comparison-page-only .cmp-table td.col-product { text-align: left; }
 .comparison-page-only .cmp-price,
 .comparison-page-only .cmp-diff-chip,
 .comparison-page-only .cmp-offers-count-pill,
 .comparison-page-only .cmp-lowest-price-text,
 .comparison-page-only .badge-green,
-.comparison-page-only .badge-gray {
-    margin-left: auto;
-    margin-right: auto;
-}
+.comparison-page-only .badge-gray { margin-left: auto; margin-right: auto; }
+.comparison-page-only .col-toggle { text-align: center; }
 
-.comparison-page-only .col-toggle {
-    text-align: center;
-}
-/* =========================
-   FINAL DARK FIX - PRODUCT COLUMN + TOGGLE BUTTON
-   ========================= */
-
-/* sticky product column */
-.dark .comparison-page-only .cmp-table thead th.col-product {
-    background: #111c34 !important;
-    color: #94a3b8 !important;
-    box-shadow: inset -1px 0 0 #22304d !important;
-}
-
+/* FINAL DARK FIX */
+.dark .comparison-page-only .cmp-table thead th.col-product { background: #111c34 !important; color: #94a3b8 !important; box-shadow: inset -1px 0 0 #22304d !important; }
 .dark .comparison-page-only .cmp-table tbody td.col-product,
 .dark .comparison-page-only .cmp-table tbody tr td.col-product,
-.dark .comparison-page-only .cmp-main-row td.col-product {
-    background: #0f172a !important;
-    color: #e5e7eb !important;
-    box-shadow: inset -1px 0 0 #22304d !important;
-}
-
-/* hover state on sticky product column */
+.dark .comparison-page-only .cmp-main-row td.col-product { background: #0f172a !important; color: #e5e7eb !important; box-shadow: inset -1px 0 0 #22304d !important; }
 .dark .comparison-page-only .cmp-table tbody tr:hover td.col-product,
-.dark .comparison-page-only .cmp-table tbody tr.cmp-main-row:hover td.col-product {
-    background: #13203a !important;
-}
-
-/* product link in dark */
-.dark .comparison-page-only .cmp-product-link {
-    color: #a5b4fc !important;
-}
-
-/* toggle column/button cell */
+.dark .comparison-page-only .cmp-table tbody tr.cmp-main-row:hover td.col-product { background: #13203a !important; }
+.dark .comparison-page-only .cmp-product-link { color: #a5b4fc !important; }
 .dark .comparison-page-only .col-toggle,
 .dark .comparison-page-only .cmp-table thead th.col-toggle,
-.dark .comparison-page-only .cmp-table tbody td.col-toggle {
-    background: #0f172a !important;
-    color: #e5e7eb !important;
-}
+.dark .comparison-page-only .cmp-table tbody td.col-toggle { background: #0f172a !important; color: #e5e7eb !important; }
+.dark .comparison-page-only .cmp-arrow-btn { width: 42px; height: 42px; border-radius: 999px; background: #111c34 !important; color: #60a5fa !important; border: 1px solid #22304d !important; box-shadow: none !important; }
+.dark .comparison-page-only .cmp-arrow-btn:hover { background: #16233d !important; border-color: #2f4670 !important; color: #93c5fd !important; }
+.dark .comparison-page-only .cmp-arrow-btn.active { background: #1d4ed8 !important; color: #ffffff !important; border-color: #2563eb !important; }
 
-/* arrow button */
-.dark .comparison-page-only .cmp-arrow-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 999px;
-    background: #111c34 !important;
-    color: #60a5fa !important;
-    border: 1px solid #22304d !important;
-    box-shadow: none !important;
-}
-
-.dark .comparison-page-only .cmp-arrow-btn:hover {
-    background: #16233d !important;
-    border-color: #2f4670 !important;
-    color: #93c5fd !important;
-}
-
-.dark .comparison-page-only .cmp-arrow-btn.active {
-    background: #1d4ed8 !important;
-    color: #ffffff !important;
-    border-color: #2563eb !important;
-}
-/* =========================
-   FORCE DARK MODE FIX
-   ========================= */
-
-/* 🔥 PRODUCT COLUMN */
+/* FORCE DARK MODE FIX */
 .dark-mode .comparison-page-only .cmp-table th.col-product,
-.dark-mode .comparison-page-only .cmp-table td.col-product {
-    background: #0f172a !important;
-    color: #e5e7eb !important;
-}
+.dark-mode .comparison-page-only .cmp-table td.col-product { background: #0f172a !important; color: #e5e7eb !important; }
+.dark-mode .comparison-page-only .cmp-table thead th.col-product { background: #111c34 !important; }
+.dark-mode .comparison-page-only .cmp-table tbody tr:hover td.col-product { background: #13203a !important; }
+.dark-mode .comparison-page-only .cmp-table td.col-product { z-index: 5 !important; }
+.dark-mode .comparison-page-only .cmp-arrow-btn { background: #111c34 !important; color: #60a5fa !important; border: 1px solid #22304d !important; }
+.dark-mode .comparison-page-only .cmp-arrow-btn:hover { background: #16233d !important; color: #93c5fd !important; }
 
-/* header */
-.dark-mode .comparison-page-only .cmp-table thead th.col-product {
-    background: #111c34 !important;
-}
-
-/* hover */
-.dark-mode .comparison-page-only .cmp-table tbody tr:hover td.col-product {
-    background: #13203a !important;
-}
-
-/* 🔥 CRITICAL sticky fix */
-.dark-mode .comparison-page-only .cmp-table td.col-product {
-    z-index: 5 !important;
-}
-
-/* =========================
-   TOGGLE BUTTON FIX
-   ========================= */
-
-.dark-mode .comparison-page-only .cmp-arrow-btn {
-    background: #111c34 !important;
-    color: #60a5fa !important;
-    border: 1px solid #22304d !important;
-}
-
-.dark-mode .comparison-page-only .cmp-arrow-btn:hover {
-    background: #16233d !important;
-    color: #93c5fd !important;
-}
-/* =========================
-   GLOBAL DARK SCROLLBAR
-   ========================= */
-
-/* Firefox */
-.dark-mode * {
-    scrollbar-width: thin;
-    scrollbar-color: #223a5e #0b1220;
-}
-
-/* Chrome / Edge / Safari */
-.dark-mode *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-.dark-mode *::-webkit-scrollbar-track {
-    background: #0b1220;
-    border-radius: 999px;
-}
-
-.dark-mode *::-webkit-scrollbar-thumb {
-    background: #223a5e;
-    border-radius: 999px;
-    border: 2px solid #0b1220;
-}
-
-.dark-mode *::-webkit-scrollbar-thumb:hover {
-    background: #2f5ea8;
-}
+/* GLOBAL DARK SCROLLBAR */
+.dark-mode * { scrollbar-width: thin; scrollbar-color: #223a5e #0b1220; }
+.dark-mode *::-webkit-scrollbar { width: 10px; height: 10px; }
+.dark-mode *::-webkit-scrollbar-track { background: #0b1220; border-radius: 999px; }
+.dark-mode *::-webkit-scrollbar-thumb { background: #223a5e; border-radius: 999px; border: 2px solid #0b1220; }
+.dark-mode *::-webkit-scrollbar-thumb:hover { background: #2f5ea8; }
 </style>
 @endsection

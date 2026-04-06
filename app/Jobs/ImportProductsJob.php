@@ -2,8 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Jobs\AutoSearchProductJob;
-use App\Jobs\PriceCheckProductJob;
 use App\Models\ImportError;
 use App\Models\ImportJob;
 use App\Models\Product;
@@ -15,20 +13,21 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ImportProductsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected int $importJobId;
+    public int $tries   = 1;
+    public int $timeout = 3600;
 
-    public function __construct(int $importJobId)
+    public function __construct(protected int $importJobId)
     {
-        $this->importJobId = $importJobId;
+        $this->onQueue('import');
     }
 
-    public function handle(): void
+    public function handle(OwnProductPriceService $priceService): void
     {
         $importJob = ImportJob::find($this->importJobId);
 
@@ -36,14 +35,17 @@ class ImportProductsJob implements ShouldQueue
             return;
         }
 
+        $hasModel        = Schema::hasColumn('products', 'model');
+        $hasScanPriority = Schema::hasColumn('products', 'scan_priority');
+
         try {
             Log::info('Import job started', [
                 'import_job_id' => $importJob->id,
-                'file_path' => $importJob->file_path,
+                'file_path'     => $importJob->file_path,
             ]);
 
             $importJob->update([
-                'status' => 'processing',
+                'status'     => 'processing',
                 'started_at' => now(),
                 'last_error' => null,
             ]);
@@ -54,30 +56,30 @@ class ImportProductsJob implements ShouldQueue
                 throw new \RuntimeException('Import file not found: ' . $fullPath);
             }
 
-            $sheetRows = $this->readCsvRows($fullPath);
-
-            Log::info('Import file parsed', [
-                'import_job_id' => $importJob->id,
-                'rows_count' => count($sheetRows),
-            ]);
+            // ── Чети XLS/XLSX ────────────────────────────────────────────────
+            $sheetRows = $this->readSpreadsheetRows($fullPath);
 
             if (count($sheetRows) < 2) {
                 $importJob->update([
-                    'status' => 'failed',
-                    'last_error' => 'Файлът е празен или няма данни.',
+                    'status'      => 'failed',
+                    'last_error'  => 'Файлът е празен или няма данни.',
                     'finished_at' => now(),
                 ]);
                 return;
             }
 
-            $header = array_map(function ($h) {
-                return strtolower(trim(str_replace("\xEF\xBB\xBF", '', (string) $h)));
-            }, $sheetRows[0]);
+            $header = array_map(
+                fn ($h) => strtolower(trim(str_replace("\xEF\xBB\xBF", '', (string) $h))),
+                $sheetRows[0]
+            );
 
             $dataRows = array_slice($sheetRows, 1);
 
-            $importJob->update([
-                'total_rows' => count($dataRows),
+            $importJob->update(['total_rows' => count($dataRows)]);
+
+            Log::info('Import file parsed', [
+                'import_job_id' => $importJob->id,
+                'rows_count'    => count($dataRows),
             ]);
 
             foreach ($dataRows as $index => $row) {
@@ -85,15 +87,7 @@ class ImportProductsJob implements ShouldQueue
 
                 try {
                     if (! is_array($row)) {
-                        ImportError::create([
-                            'import_job_id' => $importJob->id,
-                            'row_number' => $rowNumber,
-                            'row_data' => json_encode($row),
-                            'error_message' => 'Невалиден ред',
-                        ]);
-
-                        $importJob->increment('error_count');
-                        $importJob->increment('processed_rows');
+                        $this->logError($importJob, $rowNumber, $row, 'Невалиден ред');
                         continue;
                     }
 
@@ -104,90 +98,67 @@ class ImportProductsJob implements ShouldQueue
                     $data = array_combine($header, array_slice($row, 0, count($header)));
 
                     if (! $data) {
-                        ImportError::create([
-                            'import_job_id' => $importJob->id,
-                            'row_number' => $rowNumber,
-                            'row_data' => json_encode($row),
-                            'error_message' => 'Header mismatch',
-                        ]);
-
-                        $importJob->increment('error_count');
-                        $importJob->increment('processed_rows');
+                        $this->logError($importJob, $rowNumber, $row, 'Header mismatch');
                         continue;
                     }
 
                     $name = trim((string) ($data['name'] ?? ''));
 
                     if ($name === '') {
-                        ImportError::create([
-                            'import_job_id' => $importJob->id,
-                            'row_number' => $rowNumber,
-                            'row_data' => json_encode($data),
-                            'error_message' => 'Липсва име на продукт',
-                        ]);
-
-                        $importJob->increment('error_count');
-                        $importJob->increment('processed_rows');
+                        $this->logError($importJob, $rowNumber, $data, 'Липсва име на продукт');
                         continue;
                     }
 
-                    $sku = trim((string) ($data['sku'] ?? ''));
-                    $ean = trim((string) ($data['ean'] ?? ''));
-                    $model = trim((string) ($data['model'] ?? ''));
+                    $sku        = trim((string) ($data['sku']         ?? ''));
+                    $ean        = trim((string) ($data['ean']         ?? ''));
+                    $model      = trim((string) ($data['model']       ?? ''));
+                    $productUrl = trim((string) ($data['product_url'] ?? ''));
 
+                    // Намери съществуващ продукт
                     $product = null;
-
-                    if ($sku !== '') {
-                        $product = Product::where('sku', $sku)->first();
-                    }
-
-                    if (! $product && $ean !== '') {
-                        $product = Product::where('ean', $ean)->first();
-                    }
-
-                    if (! $product && $model !== '' && Schema::hasColumn('products', 'model')) {
+                    if ($sku !== '')                        $product = Product::where('sku', $sku)->first();
+                    if (! $product && $ean !== '')          $product = Product::where('ean', $ean)->first();
+                    if (! $product && $model !== '' && $hasModel) {
                         $product = Product::where('model', $model)->first();
                     }
 
+                    // Вземи цена
+                    $price = null;
+                    if ($productUrl !== '') {
+                        $price = $this->getPriceWithRetry($priceService, $productUrl);
+                    }
+                    if ($price === null && ! empty($data['our_price'])) {
+                        $price = round((float) str_replace(',', '.', (string) $data['our_price']), 2);
+                        if ($price <= 0) $price = null;
+                    }
+
+                    if ($price === null) {
+                        $this->logError($importJob, $rowNumber, $data, 'Не може да се вземе цена');
+                        continue;
+                    }
+
+                    // Построй данните
                     $productData = [
-                        'name' => $name,
-                        'sku' => $sku !== '' ? $sku : null,
-                        'ean' => $ean !== '' ? $ean : null,
-                        'brand' => trim((string) ($data['brand'] ?? '')) ?: null,
-                        'product_url' => trim((string) ($data['product_url'] ?? '')) ?: null,
-                        'is_active' => in_array(
+                        'name'        => $name,
+                        'sku'         => $sku        !== '' ? $sku        : null,
+                        'ean'         => $ean        !== '' ? $ean        : null,
+                        'brand'       => trim((string) ($data['brand'] ?? '')) ?: null,
+                        'product_url' => $productUrl !== '' ? $productUrl : null,
+                        'our_price'   => number_format($price, 2, '.', ''),
+                        'is_active'   => in_array(
                             strtolower(trim((string) ($data['is_active'] ?? '1'))),
                             ['1', 'true', 'yes', 'on'],
                             true
                         ) ? 1 : 0,
                     ];
 
-                    if (Schema::hasColumn('products', 'model')) {
+                    if ($hasModel) {
                         $productData['model'] = $model !== '' ? $model : null;
                     }
 
-                    $price = $this->getPriceWithRetry($productData['product_url']);
-
-                    if ($price !== null) {
-                        $productData['our_price'] = number_format($price, 2, '.', '');
-                    } elseif (! empty($data['our_price'])) {
-                        $productData['our_price'] = number_format(
-                            (float) str_replace(',', '.', (string) $data['our_price']),
-                            2,
-                            '.',
-                            ''
-                        );
-                    } else {
-                        ImportError::create([
-                            'import_job_id' => $importJob->id,
-                            'row_number' => $rowNumber,
-                            'row_data' => json_encode($data),
-                            'error_message' => 'Не може да се вземе цена',
-                        ]);
-
-                        $importJob->increment('error_count');
-                        $importJob->increment('processed_rows');
-                        continue;
+                    if ($hasScanPriority) {
+                        $priority = strtolower(trim((string) ($data['scan_priority'] ?? 'normal')));
+                        $productData['scan_priority'] = in_array($priority, ['top', 'normal']) ? $priority : 'normal';
                     }
 
                     if ($product) {
@@ -198,116 +169,122 @@ class ImportProductsJob implements ShouldQueue
                         $importJob->increment('imported_count');
                     }
 
+                    // Само AutoSearch — той пуска PriceCheck след като приключи
                     dispatch(
                         (new AutoSearchProductJob($product->id))
                             ->onQueue('search')
-                            ->delay(now()->addSeconds(1))
                     );
 
-                    dispatch(
-                        (new PriceCheckProductJob($product->id))
-                            ->onQueue('price')
-                            ->delay(now()->addSeconds(5))
-                    );
                 } catch (\Throwable $e) {
-                    ImportError::create([
-                        'import_job_id' => $importJob->id,
-                        'row_number' => $rowNumber,
-                        'row_data' => json_encode($row),
-                        'error_message' => $e->getMessage(),
-                    ]);
+                    $this->logError($importJob, $rowNumber, $row ?? [], $e->getMessage());
 
                     Log::error('Import row error', [
                         'import_job_id' => $importJob->id,
-                        'row' => $row,
-                        'error' => $e->getMessage(),
+                        'row_number'    => $rowNumber,
+                        'error'         => $e->getMessage(),
                     ]);
 
-                    $importJob->update([
-                        'last_error' => $e->getMessage(),
-                    ]);
-
-                    $importJob->increment('error_count');
+                    $importJob->update(['last_error' => $e->getMessage()]);
                 }
 
                 $importJob->increment('processed_rows');
             }
 
-            Storage::delete($importJob->file_path);
+            // Изтрий файла след успех
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
 
             $importJob->update([
-                'status' => 'completed',
+                'status'      => 'completed',
                 'finished_at' => now(),
             ]);
 
             Log::info('Import job finished', [
-                'import_job_id' => $importJob->id,
+                'import_job_id'  => $importJob->id,
+                'imported_count' => $importJob->imported_count,
+                'updated_count'  => $importJob->updated_count,
+                'error_count'    => $importJob->error_count,
             ]);
+
         } catch (\Throwable $e) {
             Log::error('Import failed', [
                 'import_job_id' => $this->importJobId,
-                'error' => $e->getMessage(),
+                'error'         => $e->getMessage(),
             ]);
 
             $importJob->update([
-                'status' => 'failed',
-                'last_error' => $e->getMessage(),
+                'status'      => 'failed',
+                'last_error'  => $e->getMessage(),
                 'finished_at' => now(),
             ]);
         }
     }
 
-    private function readCsvRows(string $fullPath): array
+    // ================================================================
+    // HELPERS
+    // ================================================================
+
+    private function readSpreadsheetRows(string $fullPath): array
     {
-        $content = file_get_contents($fullPath);
+        $spreadsheet = IOFactory::load($fullPath);
+        $sheet       = $spreadsheet->getActiveSheet();
+        $rows        = [];
 
-        if ($content === false) {
-            throw new \RuntimeException('Cannot read CSV file.');
-        }
+        foreach ($sheet->getRowIterator() as $row) {
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(false);
 
-        $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
-        $delimiter = substr_count($content, ';') > substr_count($content, ',') ? ';' : ',';
-
-        $rows = [];
-        $handle = fopen($fullPath, 'r');
-
-        if (! $handle) {
-            throw new \RuntimeException('Cannot open CSV file.');
-        }
-
-        while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
-            if (count($data) === 1 && isset($data[0])) {
-                $data[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $data[0]);
+            $rowData = [];
+            foreach ($cellIterator as $cell) {
+                $rowData[] = $cell->getFormattedValue();
             }
 
-            $rows[] = $data;
-        }
+            // Пропусни напълно празни редове
+            if (count(array_filter($rowData, fn ($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
 
-        fclose($handle);
+            $rows[] = $rowData;
+        }
 
         return $rows;
     }
 
-    private function getPriceWithRetry(?string $url): ?float
+    private function getPriceWithRetry(OwnProductPriceService $priceService, string $url, int $tries = 2): ?float
     {
-        if (! $url) {
-            return null;
-        }
-
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < $tries; $i++) {
             try {
-                $price = app(OwnProductPriceService::class)->getPrice($url);
-
-                if ($price !== null) {
-                    return $price;
+                $price = $priceService->getPrice($url);
+                if ($price !== null && $price > 0) {
+                    return round($price, 2);
                 }
-
-                sleep(1);
             } catch (\Throwable $e) {
-                sleep(1);
+                Log::warning('getPriceWithRetry failed', [
+                    'url'     => $url,
+                    'attempt' => $i + 1,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+
+            if ($i < $tries - 1) {
+                sleep(2);
             }
         }
 
         return null;
+    }
+
+    private function logError(ImportJob $importJob, int $rowNumber, mixed $data, string $message): void
+    {
+        ImportError::create([
+            'import_job_id' => $importJob->id,
+            'row_number'    => $rowNumber,
+            'row_data'      => json_encode($data),
+            'error_message' => $message,
+        ]);
+
+        $importJob->increment('error_count');
+        $importJob->increment('processed_rows');
     }
 }

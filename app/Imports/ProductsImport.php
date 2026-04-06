@@ -3,113 +3,111 @@
 namespace App\Imports;
 
 use App\Jobs\AutoSearchProductJob;
-use App\Jobs\PriceCheckProductJob;
 use App\Models\Product;
 use App\Services\OwnProductPriceService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 class ProductsImport implements ToCollection
 {
     public function collection(Collection $rows)
     {
-        if ($rows->isEmpty()) {
-            return;
-        }
+        if ($rows->isEmpty()) return;
 
-        $header = $rows->first()->map(fn ($h) => trim((string) $h))->toArray();
-        $rows = $rows->skip(1);
+        $hasModel        = Schema::hasColumn('products', 'model');
+        $hasScanPriority = Schema::hasColumn('products', 'scan_priority');
 
-        foreach ($rows as $row) {
+        $header = $rows->first()->map(fn ($h) => strtolower(trim((string) $h)))->toArray();
+        $dataRows = $rows->skip(1);
+
+        foreach ($dataRows as $row) {
             try {
                 $data = array_combine($header, $row->toArray());
+                if (!$data || empty(trim((string) ($data['name'] ?? '')))) continue;
 
-                if (! $data || empty($data['name'])) {
+                $name       = trim((string) ($data['name'] ?? ''));
+                $sku        = trim((string) ($data['sku']   ?? ''));
+                $ean        = trim((string) ($data['ean']   ?? ''));
+                $model      = trim((string) ($data['model'] ?? ''));
+                $productUrl = trim((string) ($data['product_url'] ?? ''));
+
+                // Намери съществуващ продукт
+                $product = null;
+                if ($sku !== '')   $product = Product::where('sku', $sku)->first();
+                if (!$product && $ean !== '')   $product = Product::where('ean', $ean)->first();
+                if (!$product && $model !== '' && $hasModel) $product = Product::where('model', $model)->first();
+
+                // Вземи цена
+                $price = null;
+                if ($productUrl !== '') {
+                    $price = $this->getPriceWithRetry($productUrl);
+                }
+                if ($price === null && !empty($data['our_price'])) {
+                    $price = round((float) str_replace(',', '.', (string) $data['our_price']), 2);
+                    if ($price <= 0) $price = null;
+                }
+                if ($price === null) {
+                    Log::warning('Import: no price', ['name' => $name]);
                     continue;
                 }
 
-                $sku = trim((string) ($data['sku'] ?? ''));
-                $ean = trim((string) ($data['ean'] ?? ''));
-                $model = trim((string) ($data['model'] ?? ''));
-
-                $product = null;
-
-                if ($sku !== '') {
-                    $product = Product::where('sku', $sku)->first();
-                }
-
-                if (! $product && $ean !== '') {
-                    $product = Product::where('ean', $ean)->first();
-                }
-
-                if (! $product && $model !== '') {
-                    $product = Product::where('model', $model)->first();
-                }
-
+                // Построй данните
                 $productData = [
-                    'name' => trim((string) ($data['name'] ?? '')),
-                    'sku' => $sku ?: null,
-                    'ean' => $ean ?: null,
-                    'brand' => trim((string) ($data['brand'] ?? '')) ?: null,
-                    'product_url' => trim((string) ($data['product_url'] ?? '')) ?: null,
-                    'is_active' => isset($data['is_active'])
-                        ? (int) $data['is_active']
-                        : 1,
+                    'name'        => $name,
+                    'sku'         => $sku ?: null,
+                    'ean'         => $ean ?: null,
+                    'brand'       => trim((string) ($data['brand'] ?? '')) ?: null,
+                    'product_url' => $productUrl ?: null,
+                    'our_price'   => number_format($price, 2, '.', ''),
+                    'is_active'   => in_array(
+                        strtolower(trim((string) ($data['is_active'] ?? '1'))),
+                        ['1', 'true', 'yes', 'on'], true
+                    ) ? 1 : 0,
                 ];
 
-                if ($model !== '') {
-                    $productData['model'] = $model;
+                if ($hasModel) {
+                    $productData['model'] = $model ?: null;
                 }
 
-                $price = $this->getPriceWithRetry($productData['product_url']);
-
-                if ($price === null) {
-                    continue;
+                if ($hasScanPriority) {
+                    $priority = strtolower(trim((string) ($data['scan_priority'] ?? 'normal')));
+                    $productData['scan_priority'] = in_array($priority, ['top', 'normal']) ? $priority : 'normal';
                 }
 
-                $productData['our_price'] = number_format($price, 2, '.', '');
-
+                // Create или Update
                 if ($product) {
                     $product->update($productData);
                 } else {
                     $product = Product::create($productData);
                 }
 
+                // Само AutoSearch — той пуска PriceCheck след като приключи
                 AutoSearchProductJob::dispatch($product->id)
-                    ->onQueue('search')
-                    ->delay(now()->addSeconds(1));
+                    ->onQueue('search');
 
-                PriceCheckProductJob::dispatch($product->id)
-                    ->onQueue('price')
-                    ->delay(now()->addSeconds(5));
             } catch (\Throwable $e) {
-                Log::error('Import error', [
-                    'row' => $row,
+                Log::error('Import row error', [
+                    'name'  => $data['name'] ?? 'unknown',
                     'error' => $e->getMessage(),
                 ]);
             }
         }
     }
 
-    private function getPriceWithRetry(?string $url): ?float
+    private function getPriceWithRetry(?string $url, int $tries = 2): ?float
     {
-        if (! $url) {
-            return null;
-        }
+        if (!$url) return null;
 
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < $tries; $i++) {
             try {
                 $price = app(OwnProductPriceService::class)->getPrice($url);
-
-                if ($price !== null) {
-                    return $price;
-                }
-
-                sleep(1);
+                if ($price !== null && $price > 0) return round($price, 2);
             } catch (\Throwable $e) {
-                sleep(1);
+                Log::warning('getPriceWithRetry failed', ['url' => $url, 'attempt' => $i + 1]);
             }
+            if ($i < $tries - 1) sleep(2);
         }
 
         return null;

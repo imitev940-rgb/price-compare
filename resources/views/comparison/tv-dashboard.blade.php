@@ -76,16 +76,15 @@
             border-color: rgba(255,255,255,0.25);
         }
 
-        .tv-fullscreen-btn:active {
-            transform: scale(0.98);
-        }
+        .tv-fullscreen-btn:active { transform: scale(0.98); }
+
+        #exitFullscreenBtn { display: none; }
 
         .tv-columns {
             flex: 1;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 18px;
-            min-height: 0;
             overflow: hidden;
         }
 
@@ -96,7 +95,6 @@
             padding: 16px;
             display: flex;
             flex-direction: column;
-            min-height: 0;
             overflow: hidden;
             box-shadow: 0 12px 40px rgba(0,0,0,0.22);
             backdrop-filter: blur(8px);
@@ -109,47 +107,63 @@
             margin-bottom: 4px;
         }
 
-        .tv-col-title {
-            font-size: 24px;
-            font-weight: 900;
-            line-height: 1;
-        }
+        .tv-col-title { font-size: 24px; font-weight: 900; line-height: 1; }
+        .tv-col-count { font-size: 20px; font-weight: 900; line-height: 1; }
+        .tv-col-sub   { font-size: 14px; color: #cbd5e1; margin-bottom: 12px; }
 
-        .tv-col-count {
-            font-size: 20px;
-            font-weight: 900;
-            line-height: 1;
+        /* Page dots */
+        .tv-page-dots {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
         }
-
-        .tv-col-sub {
-            font-size: 14px;
-            color: #cbd5e1;
-            margin-bottom: 12px;
+        .tv-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s, transform 0.3s;
+        }
+        .tv-dot.active {
+            background: rgba(255,255,255,0.85);
+            transform: scale(1.3);
         }
 
         .tv-list {
             flex: 1;
-            min-height: 0;
-            height: 100%;
-            overflow-y: auto;
-            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             gap: 10px;
-            padding-right: 4px;
-            scrollbar-width: none;
+            overflow: hidden;
+            transition: opacity 0.45s ease, transform 0.45s ease;
         }
 
-        .tv-list::-webkit-scrollbar {
-            display: none;
+        .tv-list.fade-out {
+            opacity: 0;
+            transform: translateY(-16px);
+        }
+
+        .tv-list.fade-in {
+            opacity: 0;
+            transform: translateY(16px);
         }
 
         .tv-card {
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 18px;
-            padding: 14px 16px;
-            transition: transform 0.45s ease, opacity 0.45s ease, box-shadow 0.45s ease, border-color 0.45s ease;
+            padding: 12px 16px;
+            min-height: 0;
+            display: flex;
+            max-height: 20vh;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+            transition: border-color 0.45s ease, box-shadow 0.45s ease;
+        }
+
+        .tv-card-empty {
+            border-radius: 18px;
+            min-height: 0;
         }
 
         .tv-card.updated {
@@ -158,45 +172,31 @@
             box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35), 0 0 34px rgba(250, 204, 21, 0.22);
         }
 
-        .tv-card.entered-top {
-            animation: enteredTop 2.6s ease;
-        }
-
-        .tv-card.entered-not-top {
-            animation: enteredNotTop 2.6s ease;
-        }
-
-        .tv-card.fade-swap {
-            animation: fadeSwap 0.65s ease;
-        }
+        .tv-card.entered-top    { animation: enteredTop    2.6s ease; }
+        .tv-card.entered-not-top{ animation: enteredNotTop 2.6s ease; }
 
         @keyframes tvPulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
-            25% { transform: scale(1.02); box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.45), 0 0 38px rgba(250, 204, 21, 0.30); }
-            100% { transform: scale(1); box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.15), 0 0 0 rgba(250, 204, 21, 0); }
+            0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(250,204,21,0); }
+            25%  { transform: scale(1.02); box-shadow: 0 0 0 1px rgba(250,204,21,0.45), 0 0 38px rgba(250,204,21,0.30); }
+            100% { transform: scale(1);    box-shadow: 0 0 0 1px rgba(250,204,21,0.15); }
         }
 
         @keyframes enteredTop {
-            0% { transform: translateX(40px) scale(0.98); opacity: 0.2; background: rgba(34, 197, 94, 0.28); }
-            50% { transform: translateX(0) scale(1.02); opacity: 1; box-shadow: 0 0 28px rgba(34, 197, 94, 0.30); }
+            0%   { transform: translateX(40px) scale(0.98); opacity: 0.2; background: rgba(34,197,94,0.28); }
+            50%  { transform: translateX(0) scale(1.02); opacity: 1; box-shadow: 0 0 28px rgba(34,197,94,0.30); }
             100% { transform: translateX(0) scale(1); background: rgba(255,255,255,0.06); }
         }
 
         @keyframes enteredNotTop {
-            0% { transform: translateX(-40px) scale(0.98); opacity: 0.2; background: rgba(244, 63, 94, 0.28); }
-            50% { transform: translateX(0) scale(1.02); opacity: 1; box-shadow: 0 0 28px rgba(244, 63, 94, 0.30); }
+            0%   { transform: translateX(-40px) scale(0.98); opacity: 0.2; background: rgba(244,63,94,0.28); }
+            50%  { transform: translateX(0) scale(1.02); opacity: 1; box-shadow: 0 0 28px rgba(244,63,94,0.30); }
             100% { transform: translateX(0) scale(1); background: rgba(255,255,255,0.06); }
         }
 
-        @keyframes fadeSwap {
-            0% { opacity: 0.15; transform: translateY(16px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
-
         .tv-product {
-            font-size: 24px;
+            font-size: clamp(14px, 1.6vw, 22px);
             font-weight: 900;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             line-height: 1.15;
             letter-spacing: -0.02em;
             display: -webkit-box;
@@ -230,38 +230,16 @@
         }
 
         .tv-meta-value {
-            font-size: 22px;
+            font-size: clamp(13px, 1.4vw, 20px);
             font-weight: 900;
             color: #fff;
             line-height: 1.08;
-            word-break: normal;
-            overflow-wrap: normal;
         }
 
-        .tv-number {
-            white-space: nowrap;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .tv-store {
-            font-size: 18px;
-            line-height: 1.05;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            word-break: break-word;
-        }
-
-        .tv-chip-red {
-            color: #fda4af;
-            font-weight: 900;
-        }
-
-        .tv-chip-green {
-            color: #86efac;
-            font-weight: 900;
-        }
+        .tv-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .tv-store  { font-size: clamp(11px, 1.1vw, 16px); line-height: 1.05; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+        .tv-chip-red   { color: #fda4af; font-weight: 900; }
+        .tv-chip-green { color: #86efac; font-weight: 900; }
 
         .tv-marquee-wrap {
             margin-top: 14px;
@@ -278,330 +256,217 @@
             animation: marquee 25s linear infinite;
         }
 
-        .tv-marquee span {
-            margin: 0 36px;
-            font-size: 18px;
-            color: #e2e8f0;
-        }
+        .tv-marquee span { margin: 0 36px; font-size: 18px; color: #e2e8f0; }
 
         @keyframes marquee {
-            0% { transform: translateX(0); }
+            0%   { transform: translateX(0); }
             100% { transform: translateX(-50%); }
         }
 
         @media (max-width: 1200px) {
-            .tv-title {
-                font-size: 34px;
-            }
-
-            .tv-columns {
-                grid-template-columns: 1fr;
-            }
+            .tv-title   { font-size: 34px; }
+            .tv-columns { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="tv-wrap">
-        <div class="tv-header">
-            <div>
-                <div class="tv-title">PriceHunterPro TV Dashboard</div>
-                <div class="tv-subtitle">Live market board</div>
-            </div>
-
-            <div class="tv-header-right">
-                <button id="fullscreenBtn" class="tv-fullscreen-btn" type="button">⛶ Full Screen</button>
-
-                <div class="tv-status-box">
-                    <div id="lastLoadTime" class="tv-subtitle">Last load: {{ now()->format('d.m.Y H:i:s') }}</div>
-                </div>
-            </div>
+<div class="tv-wrap">
+    <div class="tv-header">
+        <div>
+            <div class="tv-title">PriceHunterPro TV Dashboard</div>
+            <div class="tv-subtitle">Live market board</div>
         </div>
-
-        <div class="tv-columns">
-            <div class="tv-col">
-                <div class="tv-col-title-row">
-                    <div class="tv-col-title" style="color:#fda4af;">NOT TOP</div>
-                    <div id="notTopTotal" class="tv-col-count" style="color:#fda4af;">0</div>
-                </div>
-                <div class="tv-col-sub">Only products not #1 in Pazaruvaj with diff above 5</div>
-                <div id="notTopList" class="tv-list"></div>
-            </div>
-
-            <div class="tv-col">
-                <div class="tv-col-title-row">
-                    <div class="tv-col-title" style="color:#86efac;">TOP</div>
-                    <div id="topTotal" class="tv-col-count" style="color:#86efac;">0</div>
-                </div>
-                <div class="tv-col-sub">Only #1 products where next lowest offer after ours is above 5</div>
-                <div id="topList" class="tv-list"></div>
-            </div>
-        </div>
-
-        <div class="tv-marquee-wrap">
-            <div class="tv-marquee">
-                <span>✦ Live monitoring active</span>
-                <span>✦ Refresh data every 30 minutes</span>
-                <span>✦ Page rotation every 30 seconds</span>
-                <span>✦ Not Top shows only products with diff above 5</span>
-                <span>✦ Not Top also shows lowest store</span>
-                <span>✦ Top shows only products where next offer after ours is above 5</span>
-                <span>✦ Technopolis • Technomarket • Techmart • Tehnomix • Pazaruvaj</span>
-
-                <span>✦ Live monitoring active</span>
-                <span>✦ Refresh data every 30 minutes</span>
-                <span>✦ Page rotation every 30 seconds</span>
-                <span>✦ Not Top shows only products with diff above 5</span>
-                <span>✦ Not Top also shows lowest store</span>
-                <span>✦ Top shows only products where next offer after ours is above 5</span>
-                <span>✦ Technopolis • Technomarket • Techmart • Tehnomix • Pazaruvaj</span>
+        <div class="tv-header-right">
+            <button id="enterFullscreenBtn" class="tv-fullscreen-btn" type="button">⛶ Full Screen</button>
+            <button id="exitFullscreenBtn"  class="tv-fullscreen-btn" type="button">✕ Exit Full Screen</button>
+            <div class="tv-status-box">
+                <div id="lastLoadTime" class="tv-subtitle">Last load: {{ now()->format('d.m.Y H:i:s') }}</div>
             </div>
         </div>
     </div>
 
-    <script>
-        let previousSnapshot = {
-            not_top: new Map(),
-            top: new Map()
-        };
+    <div class="tv-columns">
+        <div class="tv-col">
+            <div class="tv-col-title-row">
+                <div class="tv-col-title" style="color:#fda4af;">NOT TOP</div>
+                <div id="notTopTotal" class="tv-col-count" style="color:#fda4af;">0</div>
+            </div>
+            <div class="tv-col-sub">Products not #1 in Pazaruvaj with diff above 5€</div>
+            <div id="notTopDots" class="tv-page-dots"></div>
+            <div id="notTopList" class="tv-list"></div>
+        </div>
 
-        let currentPage = 1;
-        let totalPages = 1;
-        const scrollStates = {};
+        <div class="tv-col">
+            <div class="tv-col-title-row">
+                <div class="tv-col-title" style="color:#86efac;">TOP</div>
+                <div id="topTotal" class="tv-col-count" style="color:#86efac;">0</div>
+            </div>
+            <div class="tv-col-sub">Products #1 where next offer is above 5€ away</div>
+            <div id="topDots" class="tv-page-dots"></div>
+            <div id="topList" class="tv-list"></div>
+        </div>
+    </div>
 
-        function startAutoScroll(containerId, speed = 0.35) {
-            const el = document.getElementById(containerId);
-            if (!el) return;
+    <div class="tv-marquee-wrap">
+        <div class="tv-marquee">
+            <span>✦ Live monitoring active</span>
+            <span>✦ Refresh data every 30 minutes</span>
+            <span>✦ Page rotation every 30 seconds</span>
+            <span>✦ Not Top shows only products with diff above 5€</span>
+            <span>✦ Not Top also shows lowest store</span>
+            <span>✦ Top shows only products where next offer after ours is above 5€</span>
+            <span>✦ Technopolis • Technomarket • Techmart • Tehnomix • Zora • Pazaruvaj</span>
+            <span>✦ Live monitoring active</span>
+            <span>✦ Refresh data every 30 minutes</span>
+            <span>✦ Page rotation every 30 seconds</span>
+            <span>✦ Not Top shows only products with diff above 5€</span>
+            <span>✦ Not Top also shows lowest store</span>
+            <span>✦ Top shows only products where next offer after ours is above 5€</span>
+            <span>✦ Technopolis • Technomarket • Techmart • Tehnomix • Zora • Pazaruvaj</span>
+        </div>
+    </div>
+</div>
 
-            if (scrollStates[containerId]?.frame) {
-                cancelAnimationFrame(scrollStates[containerId].frame);
-            }
+<script>
+    const ITEMS_PER_PAGE = 5;
+    const PAGE_INTERVAL  = 30000;
 
-            scrollStates[containerId] = {
-                paused: false,
-                frame: null
-            };
+    let allNotTop  = [];
+    let allTop     = [];
+    let notTopPage = 0;
+    let topPage    = 0;
+    let previousSnapshot = { not_top: new Map(), top: new Map() };
 
-            const state = scrollStates[containerId];
+    function buildCard(p, isTop, oldMap) {
+        const sig   = JSON.stringify({ our_price: p.our_price, position: p.position ?? null, diff_amount: p.diff_amount ?? null, lead_euro: p.lead_euro ?? null });
+        const wasHere = oldMap.has(String(p.id));
+        const changed = wasHere && oldMap.get(String(p.id)) !== sig;
+        let cls = 'tv-card';
+        if (changed) cls += ' updated';
+        else if (!wasHere) cls += isTop ? ' entered-top' : ' entered-not-top';
 
-            const step = () => {
-                if (!state.paused) {
-                    const maxScroll = el.scrollHeight - el.clientHeight;
+        if (isTop) {
+            return `<div class="${cls}">
+                <div class="tv-product">${p.name}</div>
+                <div class="tv-meta top">
+                    <div><span class="tv-meta-label">Our</span><span class="tv-meta-value tv-number">${p.our_price} €</span></div>
+                    <div><span class="tv-meta-label">Next Price</span><span class="tv-meta-value tv-number">${p.next_competitor_price} €</span></div>
+                    <div><span class="tv-meta-label">Competitor</span><span class="tv-meta-value tv-chip-green tv-store">${p.next_competitor_store}</span></div>
+                    <div><span class="tv-meta-label">Lead €</span><span class="tv-meta-value tv-chip-green tv-number">+${p.lead_euro}</span></div>
+                    <div><span class="tv-meta-label">Lead %</span><span class="tv-meta-value tv-chip-green tv-number">${p.lead_percent}%</span></div>
+                </div>
+            </div>`;
+        } else {
+            return `<div class="${cls}">
+                <div class="tv-product">${p.name}</div>
+                <div class="tv-meta not-top">
+                    <div><span class="tv-meta-label">Our</span><span class="tv-meta-value tv-number">${p.our_price} €</span></div>
+                    <div><span class="tv-meta-label">Lowest</span><span class="tv-meta-value tv-number">${p.lowest_price} €</span></div>
+                    <div><span class="tv-meta-label">Store</span><span class="tv-meta-value tv-chip-red tv-store">${p.lowest_store ?? '—'}</span></div>
+                    <div><span class="tv-meta-label">Pos</span><span class="tv-meta-value tv-chip-red tv-number">#${p.position}</span></div>
+                    <div><span class="tv-meta-label">Diff €</span><span class="tv-meta-value tv-chip-red tv-number">${p.diff_amount} €</span></div>
+                    <div><span class="tv-meta-label">Diff %</span><span class="tv-meta-value tv-chip-red tv-number">${p.diff_percent}%</span></div>
+                </div>
+            </div>`;
+        }
+    }
 
-                    if (maxScroll > 0) {
-                        el.scrollTop += speed;
+    function renderPage(listId, dotsId, items, pageIndex, isTop, oldMap) {
+        const listEl = document.getElementById(listId);
+        const dotsEl = document.getElementById(dotsId);
+        if (!listEl) return;
 
-                        if (el.scrollTop >= maxScroll) {
-                            el.scrollTop = 0;
-                        }
-                    }
-                }
+        const total = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+        const slice = items.slice(pageIndex * ITEMS_PER_PAGE, (pageIndex + 1) * ITEMS_PER_PAGE);
 
-                state.frame = requestAnimationFrame(step);
-            };
-
-            el.onmouseenter = () => state.paused = true;
-            el.onmouseleave = () => state.paused = false;
-
-            step();
+        if (dotsEl) {
+            dotsEl.innerHTML = Array.from({ length: total }, (_, i) =>
+                `<div class="tv-dot${i === pageIndex ? ' active' : ''}"></div>`
+            ).join('');
         }
 
-        function renderList(containerId, items, isTop = false) {
-            const el = document.getElementById(containerId);
-            if (!el) return;
+        listEl.classList.add('fade-out');
 
-            const snapshotKey = isTop ? 'top' : 'not_top';
-            const otherKey = isTop ? 'not_top' : 'top';
+        setTimeout(() => {
+            const cards = slice.map(p => buildCard(p, isTop, oldMap));
+            while (cards.length < ITEMS_PER_PAGE) cards.push('<div class="tv-card-empty" style="height:calc((100vh - 260px)/5 - 8px); flex-shrink:0;"></div>');
+            listEl.innerHTML = cards.join('');
 
-            const oldMap = previousSnapshot[snapshotKey] || new Map();
-            const otherOldMap = previousSnapshot[otherKey] || new Map();
-            const newMap = new Map();
+            listEl.classList.remove('fade-out');
+            listEl.classList.add('fade-in');
+            requestAnimationFrame(() => requestAnimationFrame(() => listEl.classList.remove('fade-in')));
+        }, 350);
+    }
 
-            el.innerHTML = '';
+    function advancePages() {
+        const ntPages = Math.max(1, Math.ceil(allNotTop.length / ITEMS_PER_PAGE));
+        const tPages  = Math.max(1, Math.ceil(allTop.length / ITEMS_PER_PAGE));
+        notTopPage = (notTopPage + 1) % ntPages;
+        topPage    = (topPage    + 1) % tPages;
+        renderPage('notTopList', 'notTopDots', allNotTop, notTopPage, false, previousSnapshot.not_top);
+        renderPage('topList',    'topDots',    allTop,    topPage,    true,  previousSnapshot.top);
+    }
 
-            items.forEach(p => {
-                const signature = JSON.stringify({
-                    our_price: p.our_price,
-                    lowest_price: p.lowest_price,
-                    lowest_store: p.lowest_store ?? null,
-                    position: p.position,
-                    diff_amount: p.diff_amount ?? null,
-                    diff_percent: p.diff_percent ?? null,
-                    offers_count: p.offers_count ?? null,
-                    next_competitor_store: p.next_competitor_store ?? null,
-                    next_competitor_price: p.next_competitor_price ?? null,
-                    lead_euro: p.lead_euro ?? null,
-                    lead_percent: p.lead_percent ?? null
-                });
+    async function loadData() {
+        try {
+            const res  = await fetch('/tv-dashboard-data?page=1', { cache: 'no-store' });
+            const data = await res.json();
 
-                newMap.set(String(p.id), signature);
+            const newNTMap = new Map();
+            const newTMap  = new Map();
 
-                const card = document.createElement('div');
-                card.className = 'tv-card fade-swap';
+            allNotTop = data.not_top ?? [];
+            allTop    = data.top    ?? [];
 
-                const oldSignature = oldMap.get(String(p.id));
-                const existedInOtherColumn = otherOldMap.has(String(p.id));
+            allNotTop.forEach(p => newNTMap.set(String(p.id), JSON.stringify(p)));
+            allTop.forEach(p    => newTMap.set(String(p.id),  JSON.stringify(p)));
 
-                if (oldSignature && oldSignature !== signature) {
-                    card.classList.add('updated');
-                }
+            previousSnapshot.not_top = newNTMap;
+            previousSnapshot.top     = newTMap;
 
-                if (!oldSignature && !existedInOtherColumn) {
-                    card.classList.add('updated');
-                }
+            notTopPage = 0;
+            topPage    = 0;
 
-                if (!oldSignature && existedInOtherColumn) {
-                    card.classList.add(isTop ? 'entered-top' : 'entered-not-top');
-                }
+            renderPage('notTopList', 'notTopDots', allNotTop, 0, false, newNTMap);
+            renderPage('topList',    'topDots',    allTop,    0, true,  newTMap);
 
-                if (isTop) {
-                    card.innerHTML = `
-                        <div class="tv-product">${p.name}</div>
-                        <div class="tv-meta top">
-                            <div>
-                                <span class="tv-meta-label">Our</span>
-                                <span class="tv-meta-value tv-number">${p.our_price}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Next Price</span>
-                                <span class="tv-meta-value tv-number">${p.next_competitor_price}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Competitor</span>
-                                <span class="tv-meta-value tv-chip-green tv-store">${p.next_competitor_store}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Lead</span>
-                                <span class="tv-meta-value tv-chip-green tv-number">${p.lead_euro}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">%</span>
-                                <span class="tv-meta-value tv-chip-green tv-number">${p.lead_percent}</span>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    card.innerHTML = `
-                        <div class="tv-product">${p.name}</div>
-                        <div class="tv-meta not-top">
-                            <div>
-                                <span class="tv-meta-label">Our</span>
-                                <span class="tv-meta-value tv-number">${p.our_price}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Lowest</span>
-                                <span class="tv-meta-value tv-number">${p.lowest_price}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Store</span>
-                                <span class="tv-meta-value tv-chip-red tv-store">${p.lowest_store ?? '—'}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Pos</span>
-                                <span class="tv-meta-value tv-chip-red tv-number">#${p.position}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">Diff</span>
-                                <span class="tv-meta-value tv-chip-red tv-number">${p.diff_amount}</span>
-                            </div>
-                            <div>
-                                <span class="tv-meta-label">%</span>
-                                <span class="tv-meta-value tv-chip-red tv-number">${p.diff_percent}</span>
-                            </div>
-                        </div>
-                    `;
-                }
+            document.getElementById('notTopTotal').textContent = data.not_top_total ?? allNotTop.length;
+            document.getElementById('topTotal').textContent    = data.top_total    ?? allTop.length;
 
-                el.appendChild(card);
-            });
+            const lastLoad = document.getElementById('lastLoadTime');
+            if (lastLoad) lastLoad.textContent = 'Last load: ' + (data.updated_at ?? new Date().toLocaleString());
 
-            previousSnapshot[snapshotKey] = newMap;
-
-            el.scrollTop = 0;
-            startAutoScroll(containerId, 0.35);
+        } catch (e) {
+            console.error('TV load error', e);
         }
+    }
 
-        async function loadPage(page = 1) {
-            try {
-                const res = await fetch(`/tv-dashboard-data?page=${page}`, { cache: 'no-store' });
-                const data = await res.json();
+    function updateFullscreenButtons() {
+        const inFS = !!document.fullscreenElement;
+        document.getElementById('enterFullscreenBtn').style.display = inFS ? 'none' : '';
+        document.getElementById('exitFullscreenBtn').style.display  = inFS ? 'inline-block' : 'none';
+    }
 
-                totalPages = data.total_pages || 1;
-                currentPage = data.page || 1;
+    async function enterFullscreen() {
+        try { await document.documentElement.requestFullscreen(); } catch(e) {}
+        updateFullscreenButtons();
+    }
 
-                renderList('notTopList', data.not_top, false);
-                renderList('topList', data.top, true);
+    async function exitFullscreen() {
+        try { await document.exitFullscreen(); } catch(e) {}
+        updateFullscreenButtons();
+    }
 
-                const lastLoad = document.getElementById('lastLoadTime');
-                if (lastLoad) {
-                    lastLoad.textContent = 'Last load: ' + data.updated_at;
-                }
+    document.addEventListener('fullscreenchange', updateFullscreenButtons);
 
-                const notTopTotal = document.getElementById('notTopTotal');
-                if (notTopTotal) {
-                    notTopTotal.textContent = data.not_top_total ?? 0;
-                }
-
-                const topTotal = document.getElementById('topTotal');
-                if (topTotal) {
-                    topTotal.textContent = data.top_total ?? 0;
-                }
-            } catch (e) {
-                console.error('TV load error', e);
-            }
-        }
-
-        async function refreshDataKeepPage() {
-            await loadPage(currentPage);
-        }
-
-        async function nextPage() {
-            let next = currentPage + 1;
-            if (next > totalPages) {
-                next = 1;
-            }
-            await loadPage(next);
-        }
-
-        function updateFullscreenButton() {
-            const btn = document.getElementById('fullscreenBtn');
-            if (!btn) return;
-
-            btn.textContent = document.fullscreenElement ? '✕ Exit Full Screen' : '⛶ Full Screen';
-        }
-
-        async function toggleFullscreen() {
-            try {
-                if (!document.fullscreenElement) {
-                    await document.documentElement.requestFullscreen();
-                } else {
-                    await document.exitFullscreen();
-                }
-            } catch (e) {
-                console.error('Fullscreen error', e);
-            }
-            updateFullscreenButton();
-        }
-
-        document.addEventListener('fullscreenchange', updateFullscreenButton);
-
-        document.addEventListener('DOMContentLoaded', async function () {
-            const fullscreenBtn = document.getElementById('fullscreenBtn');
-            if (fullscreenBtn) {
-                fullscreenBtn.addEventListener('click', toggleFullscreen);
-            }
-
-            updateFullscreenButton();
-
-            await loadPage(1);
-
-            setInterval(async () => {
-                await nextPage();
-            }, 30000);
-
-            setInterval(async () => {
-                await refreshDataKeepPage();
-            }, 1800000);
-        });
-    </script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        document.getElementById('enterFullscreenBtn').addEventListener('click', enterFullscreen);
+        document.getElementById('exitFullscreenBtn').addEventListener('click', exitFullscreen);
+        updateFullscreenButtons();
+        await loadData();
+        setInterval(advancePages, PAGE_INTERVAL);
+        setInterval(loadData, 1800000);
+    });
+</script>
 </body>
 </html>

@@ -3,6 +3,8 @@
 namespace App\Exports;
 
 use App\Exports\Sheets\ComparisonPazaruvajOffersSheet;
+use App\Exports\Sheets\ComparisonPriceDownSheet;
+use App\Exports\Sheets\ComparisonPriceUpSheet;
 use App\Exports\Sheets\ComparisonSummarySheet;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
@@ -17,6 +19,8 @@ class ComparisonWorkbookExport implements WithMultipleSheets
     {
         return [
             new ComparisonSummarySheet($this->products),
+            new ComparisonPriceDownSheet($this->products),
+            new ComparisonPriceUpSheet($this->products),
             new ComparisonPazaruvajOffersSheet($this->products),
         ];
     }

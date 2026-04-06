@@ -340,6 +340,7 @@
                     <th>Technomarket</th>
                     <th>Techmart</th>
                     <th>Tehnomix</th>
+                    <th>Zora</th>
                     <th>Pazaruvaj</th>
                     <th>Най-ниска</th>
                     <th>Оферти</th>
@@ -387,6 +388,10 @@
 
                         <td class="num">
                             {{ $product->tehnomix_price !== null ? number_format((float) $product->tehnomix_price, 2) : '—' }}
+                        </td>
+
+                        <td class="num">
+                            {{ $product->zora_price !== null ? number_format((float) $product->zora_price, 2) : '—' }}
                         </td>
 
                         <td class="num">

@@ -36,7 +36,7 @@
                 <label class="cmp-toolbar-label">Файл</label>
                 <input type="file" name="file" required class="cmp-toolbar-input" accept=".csv,.txt">
                 <small style="display:block; margin-top:6px; opacity:.75;">
-                    Поддържани файлове: CSV, TXT
+                    Поддържани формати: .XLS, .XLSx
                 </small>
             </div>
         </div>
