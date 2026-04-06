@@ -11,7 +11,7 @@ class Kernel extends ConsoleKernel
     {
         // ── Проверка на цени (dispatch jobs на опашката) ─────────────────────
         $schedule->command('prices:dispatch-due')
-            ->everyFiveMinutes()
+            ->everyMinute()
             ->withoutOverlapping()
             ->runInBackground();
 
@@ -43,7 +43,7 @@ class Kernel extends ConsoleKernel
             ->runInBackground();
 
         $schedule->command('products:auto-search --store=Zora --missing')
-            ->dailyAt('03:00')
+            ->dailyAt('03:30')
             ->withoutOverlapping()
             ->runInBackground();
     }
