@@ -252,8 +252,17 @@ async function searchStore(storeName, query) {
         return { url: null, error: 'Unknown store: ' + storeName };
     }
 
+    // Proxy само за Zora (блокира VPS IP)
+    const useProxy = storeName === 'zora';
+    const proxyConfig = useProxy ? {
+        server:   'http://31.59.20.176:6754',
+        username: 'tumdzdvc',
+        password: '9zbgvzfgy3yp',
+    } : undefined;
+
     const browser = await chromium.launch({
         headless: true,
+        proxy: proxyConfig,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
