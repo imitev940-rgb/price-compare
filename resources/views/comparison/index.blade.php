@@ -212,6 +212,7 @@
                     <label><input type="checkbox" data-col="zora_diff_euro"> Zora Diff €</label>
                     <label><input type="checkbox" data-col="zora_diff_percent"> Zora Diff %</label>
 
+                    <label><input type="checkbox" data-col="pcd_price" checked> ПЦД</label>
                     <label><input type="checkbox" data-col="pazaruvaj" checked> Pazaruvaj</label>
                     <label><input type="checkbox" data-col="lowest" checked> Lowest</label>
                     <label><input type="checkbox" data-col="offers" checked> Offers</label>
@@ -242,6 +243,7 @@
             <tr>
                 <th class="col-product">Product</th>
 
+                <th class="col-pcd_price">ПЦД</th>
                 <th class="col-our_price">Our Price</th>
 
                 <th class="col-lowest">Lowest <span class="col-lowest-info" id="lowestInfoTh" title="Показва най-ниската цена и магазина">ℹ</span></th>
@@ -282,6 +284,14 @@
                         <a href="{{ route('products.show', $product) }}" class="cmp-product-link">
                             {{ $product->name }}
                         </a>
+                    </td>
+
+                    <td class="cmp-price col-pcd_price">
+                        @if($product->pcd_price !== null)
+                            {{ number_format((float) $product->pcd_price, 2) }}
+                        @else
+                            —
+                        @endif
                     </td>
 
                     <td class="cmp-price col-our_price">
@@ -525,7 +535,7 @@
 
                 @if(($product->pazaruvaj_offers_list ?? collect())->count() > 0)
                     <tr class="cmp-offers-row">
-                        <td colspan="24">
+                        <td colspan="25">
                             <div id="offers-{{ $product->id }}" class="cmp-offers-panel">
                                 <div class="cmp-offers-headline">
                                     <div class="cmp-offers-title">
@@ -625,7 +635,7 @@
                 @endif
             @empty
                 <tr>
-                    <td colspan="24" style="text-align:center;">No products found.</td>
+                    <td colspan="25" style="text-align:center;">No products found.</td>
                 </tr>
             @endforelse
         </tbody>
@@ -1116,6 +1126,7 @@
     word-break: break-word;
 }
 
+.comparison-page-only .col-pcd_price,
 .comparison-page-only .col-our_price,
 .comparison-page-only .col-technopolis,
 .comparison-page-only .col-technomarket,

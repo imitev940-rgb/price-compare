@@ -258,6 +258,7 @@ class ComparisonController extends Controller
                 $differencePercent = round((($ourPrice - $pazaruvajLowest) / $pazaruvajLowest) * 100, 2);
             }
 
+            $product->pcd_price          = $this->normalizePrice($product->pcd_price);
             $product->technopolis_price  = $technopolisPrice;
             $product->technomarket_price = $technomarketPrice;
             $product->techmart_price     = $techmartPrice;
@@ -279,6 +280,7 @@ class ComparisonController extends Controller
             $product->zora_diff_euro    = $zoraDiffEuro;
             $product->zora_diff_percent = $zoraDiffPercent;
 
+            $product->pcd_price         = $this->normalizePrice($product->pcd_price);
             $product->lowest_direct_price = $lowestDirectPrice;
             $product->lowest_market_price = $lowestMarketPrice;
 

@@ -56,8 +56,7 @@ class ImportProductsJob implements ShouldQueue
                 throw new \RuntimeException('Import file not found: ' . $fullPath);
             }
 
-            // ── Чети XLS/XLSX ────────────────────────────────────────────────
-            $sheetRows = $this->readSpreadsheetRows($fullPath);
+            $sheetRows = $this->readXlsxRows($fullPath);
 
             if (count($sheetRows) < 2) {
                 $importJob->update([
@@ -69,7 +68,7 @@ class ImportProductsJob implements ShouldQueue
             }
 
             $header = array_map(
-                fn ($h) => strtolower(trim(str_replace("\xEF\xBB\xBF", '', (string) $h))),
+                fn ($h) => strtolower(trim((string) $h)),
                 $sheetRows[0]
             );
 
@@ -109,24 +108,27 @@ class ImportProductsJob implements ShouldQueue
                         continue;
                     }
 
-                    $sku        = trim((string) ($data['sku']         ?? ''));
-                    $ean        = trim((string) ($data['ean']         ?? ''));
-                    $model      = trim((string) ($data['model']       ?? ''));
-                    $productUrl = trim((string) ($data['product_url'] ?? ''));
+                    $sku   = trim((string) ($data['sku']   ?? ''));
+                    $ean   = trim((string) ($data['ean']   ?? ''));
+                    $model = trim((string) ($data['model'] ?? ''));
 
-                    // Намери съществуващ продукт
                     $product = null;
-                    if ($sku !== '')                        $product = Product::where('sku', $sku)->first();
-                    if (! $product && $ean !== '')          $product = Product::where('ean', $ean)->first();
+                    if ($sku !== '')                          $product = Product::where('sku', $sku)->first();
+                    if (! $product && $ean !== '')            $product = Product::where('ean', $ean)->first();
                     if (! $product && $model !== '' && $hasModel) {
                         $product = Product::where('model', $model)->first();
                     }
 
-                    // Вземи цена
-                    $price = null;
+                    $productUrl = trim((string) ($data['product_url'] ?? ''));
+                    $price      = null;
+                    $pcdPrice   = null;
+
                     if ($productUrl !== '') {
-                        $price = $this->getPriceWithRetry($priceService, $productUrl);
+                        $priceData = $this->getPriceDataWithRetry($priceService, $productUrl);
+                        $price     = $priceData['price'];
+                        $pcdPrice  = $priceData['pcd_price'];
                     }
+
                     if ($price === null && ! empty($data['our_price'])) {
                         $price = round((float) str_replace(',', '.', (string) $data['our_price']), 2);
                         if ($price <= 0) $price = null;
@@ -137,14 +139,14 @@ class ImportProductsJob implements ShouldQueue
                         continue;
                     }
 
-                    // Построй данните
                     $productData = [
                         'name'        => $name,
-                        'sku'         => $sku        !== '' ? $sku        : null,
-                        'ean'         => $ean        !== '' ? $ean        : null,
+                        'sku'         => $sku     !== '' ? $sku     : null,
+                        'ean'         => $ean     !== '' ? $ean     : null,
                         'brand'       => trim((string) ($data['brand'] ?? '')) ?: null,
                         'product_url' => $productUrl !== '' ? $productUrl : null,
                         'our_price'   => number_format($price, 2, '.', ''),
+                        'pcd_price'   => $pcdPrice !== null ? number_format($pcdPrice, 2, '.', '') : null,
                         'is_active'   => in_array(
                             strtolower(trim((string) ($data['is_active'] ?? '1'))),
                             ['1', 'true', 'yes', 'on'],
@@ -169,10 +171,23 @@ class ImportProductsJob implements ShouldQueue
                         $importJob->increment('imported_count');
                     }
 
-                    // Само AutoSearch — той пуска PriceCheck след като приключи
+                    $searchDelay = $index * 2;
+                    $priceDelay  = $index * 2 + 60;
+
+                    $priceQueue = ($productData['scan_priority'] ?? 'normal') === 'top'
+                        ? 'price_top'
+                        : 'price';
+
                     dispatch(
-                        (new AutoSearchProductJob($product->id))
+                        (new \App\Jobs\AutoSearchProductJob($product->id))
                             ->onQueue('search')
+                            ->delay(now()->addSeconds($searchDelay))
+                    );
+
+                    dispatch(
+                        (new \App\Jobs\PriceCheckProductJob($product->id))
+                            ->onQueue($priceQueue)
+                            ->delay(now()->addSeconds($priceDelay))
                     );
 
                 } catch (\Throwable $e) {
@@ -190,7 +205,6 @@ class ImportProductsJob implements ShouldQueue
                 $importJob->increment('processed_rows');
             }
 
-            // Изтрий файла след успех
             if (file_exists($fullPath)) {
                 unlink($fullPath);
             }
@@ -225,7 +239,7 @@ class ImportProductsJob implements ShouldQueue
     // HELPERS
     // ================================================================
 
-    private function readSpreadsheetRows(string $fullPath): array
+    private function readXlsxRows(string $fullPath): array
     {
         $spreadsheet = IOFactory::load($fullPath);
         $sheet       = $spreadsheet->getActiveSheet();
@@ -237,11 +251,12 @@ class ImportProductsJob implements ShouldQueue
 
             $rowData = [];
             foreach ($cellIterator as $cell) {
-                $rowData[] = $cell->getFormattedValue();
+                $rowData[] = $cell->getValue();
             }
 
-            // Пропусни напълно празни редове
-            if (count(array_filter($rowData, fn ($v) => trim((string) $v) !== '')) === 0) {
+            // Skip completely empty rows
+            $filtered = array_filter($rowData, fn ($v) => $v !== null && trim((string) $v) !== '');
+            if (empty($filtered)) {
                 continue;
             }
 
@@ -253,14 +268,19 @@ class ImportProductsJob implements ShouldQueue
 
     private function getPriceWithRetry(OwnProductPriceService $priceService, string $url, int $tries = 2): ?float
     {
+        return $this->getPriceDataWithRetry($priceService, $url, $tries)['price'];
+    }
+
+    private function getPriceDataWithRetry(OwnProductPriceService $priceService, string $url, int $tries = 2): array
+    {
         for ($i = 0; $i < $tries; $i++) {
             try {
-                $price = $priceService->getPrice($url);
-                if ($price !== null && $price > 0) {
-                    return round($price, 2);
+                $data = $priceService->getPriceData($url);
+                if (($data['price'] ?? null) !== null && $data['price'] > 0) {
+                    return $data;
                 }
             } catch (\Throwable $e) {
-                Log::warning('getPriceWithRetry failed', [
+                Log::warning('getPriceDataWithRetry failed', [
                     'url'     => $url,
                     'attempt' => $i + 1,
                     'error'   => $e->getMessage(),
@@ -272,7 +292,7 @@ class ImportProductsJob implements ShouldQueue
             }
         }
 
-        return null;
+        return ['price' => null, 'pcd_price' => null];
     }
 
     private function logError(ImportJob $importJob, int $rowNumber, mixed $data, string $message): void

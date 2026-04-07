@@ -11,14 +11,17 @@ class Product extends Model
         'sku',
         'ean',
         'brand',
+        'model',
         'product_url',
         'our_price',
+        'pcd_price',
         'is_active',
         'scan_priority',
     ];
 
     protected $casts = [
         'our_price' => 'float',
+        'pcd_price' => 'float',
         'is_active' => 'boolean',
     ];
 

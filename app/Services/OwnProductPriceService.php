@@ -9,6 +9,12 @@ class OwnProductPriceService
 {
     public function getPrice(string $url): ?float
     {
+        $data = $this->getPriceData($url);
+        return $data['price'] ?? null;
+    }
+
+    public function getPriceData(string $url): array
+    {
         try {
             $response = Http::timeout(20)
                 ->connectTimeout(8)
@@ -25,46 +31,76 @@ class OwnProductPriceService
 
             if (!$response->successful()) {
                 Log::warning('OwnProductPriceService: bad status', [
-                    'url' => $url,
+                    'url'    => $url,
                     'status' => $response->status(),
                 ]);
-
-                return null;
+                return ['price' => null, 'pcd_price' => null];
             }
 
             $html = mb_substr($response->body(), 0, 900000);
 
             if (str_contains(mb_strtolower($url), 'technika.bg')) {
-                $price = $this->extractTechnikaPrice($html);
+                $price    = $this->extractTechnikaPrice($html);
+                $pcdPrice = $this->extractTechnikaPcdPrice($html);
 
                 Log::info('OwnProductPriceService technika result', [
-                    'url' => $url,
-                    'price' => $price,
+                    'url'       => $url,
+                    'price'     => $price,
+                    'pcd_price' => $pcdPrice,
                 ]);
 
-                return $price;
+                return ['price' => $price, 'pcd_price' => $pcdPrice];
             }
 
-            return $this->extractGenericEuroPrice($html);
+            return ['price' => $this->extractGenericEuroPrice($html), 'pcd_price' => null];
+
         } catch (\Throwable $e) {
             Log::warning('OwnProductPriceService failed', [
-                'url' => $url,
+                'url'     => $url,
                 'message' => $e->getMessage(),
             ]);
-
-            return null;
+            return ['price' => null, 'pcd_price' => null];
         }
     }
+
+    // ── ПЦД цена ────────────────────────────────────────────────────────────
+
+    private function extractTechnikaPcdPrice(string $html): ?float
+    {
+        // Selector: del.u-price__del__value или del.c-price-exclude-taxes__final-price-list-price
+        // Търсим <del class="...u-price__del__value...">€299<sup>99</sup></del>
+
+        $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // Намери <del> с класа за ПЦД
+        if (!preg_match('/<del[^>]*u-price__del__value[^>]*>(.*?)<\/del>/is', $decoded, $m)) {
+            return null;
+        }
+
+        $inner = $m[1];
+
+        // Извлечи цена от вътрешния HTML
+        // Формат: €299<sup>99</sup> или €299.99
+        if (preg_match('/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*<(?:sup|span)[^>]*>\s*([0-9]{2})\s*<\/(?:sup|span)>/i', $inner, $pm)) {
+            $combined = $pm[1] . '.' . $pm[2];
+            return $this->normalizeEuroPrice($combined);
+        }
+
+        // Fallback: plain €299.99
+        $plain = strip_tags($inner);
+        if (preg_match('/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))/i', $plain, $pm)) {
+            return $this->normalizeEuroPrice($pm[1]);
+        }
+
+        return null;
+    }
+
+    // ── Основна цена ────────────────────────────────────────────────────────
 
     private function extractTechnikaPrice(string $html): ?float
     {
         $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // 1) Най-важно: цена със sup за стотинки
-        // Примери:
-        // €399<sup>99</sup>
-        // €1,153<sup>00</sup>
-        // €399<span>99</span>
         $patternsWithDecimals = [
             '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*<(?:sup|span)[^>]*>\s*([0-9]{2})\s*<\/(?:sup|span)>/iu',
             '/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*[\.,]\s*([0-9]{2})/iu',
@@ -81,7 +117,6 @@ class OwnProductPriceService
             }
         }
 
-        // 2) fallback - plain text, ако HTML е станал вече 399.99
         $plain = strip_tags($decoded);
         $plain = preg_replace('/\s+/u', ' ', $plain);
         $plain = trim($plain);
@@ -93,8 +128,6 @@ class OwnProductPriceService
             }
         }
 
-        // 3) fallback за цена преди /
-        // €399.99 / 782.31 лв.
         if (preg_match('/€\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?|[0-9]+(?:[.,][0-9]{2}))\s*\//iu', $plain, $m)) {
             $value = $this->normalizeEuroPrice($m[1]);
             if ($value !== null) {
@@ -155,24 +188,17 @@ class OwnProductPriceService
     private function normalizeEuroPrice(string $raw): ?float
     {
         $price = trim($raw);
-
-        if ($price === '') {
-            return null;
-        }
+        if ($price === '') return null;
 
         $price = html_entity_decode($price, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $price = str_replace(["\xc2\xa0", ' '], '', $price);
         $price = str_replace(['^{', '}'], ['.', ''], $price);
         $price = preg_replace('/[^\d\.,]/u', '', $price);
-
-        if ($price === '') {
-            return null;
-        }
+        if ($price === '') return null;
 
         if (str_contains($price, ',') && str_contains($price, '.')) {
             $lastComma = strrpos($price, ',');
-            $lastDot = strrpos($price, '.');
-
+            $lastDot   = strrpos($price, '.');
             if ($lastComma < $lastDot) {
                 $price = str_replace(',', '', $price);
             } else {
@@ -181,7 +207,6 @@ class OwnProductPriceService
             }
         } elseif (str_contains($price, ',')) {
             $parts = explode(',', $price);
-
             if (count($parts) > 1 && strlen((string) end($parts)) === 2) {
                 $price = str_replace(',', '.', $price);
             } else {
@@ -190,16 +215,10 @@ class OwnProductPriceService
         }
 
         $price = preg_replace('/[^\d\.]/u', '', $price);
-
-        if ($price === '' || !is_numeric($price)) {
-            return null;
-        }
+        if ($price === '' || !is_numeric($price)) return null;
 
         $value = (float) $price;
-
-        if ($value <= 0 || $value > 999999.99) {
-            return null;
-        }
+        if ($value <= 0 || $value > 999999.99) return null;
 
         return round($value, 2);
     }

@@ -23,7 +23,9 @@ class ComparisonPriceUpSheet implements FromCollection, WithHeadings, WithTitle,
     public function headings(): array
     {
         return [
+            'SKU',
             'Продукт',
+            'ПЦД (€)',
             'Наша цена (€)',
             'Следваща цена (€)',
             'Следващ магазин',
@@ -36,14 +38,12 @@ class ComparisonPriceUpSheet implements FromCollection, WithHeadings, WithTitle,
     {
         return $this->products
             ->filter(function ($product) {
-                // Трябва да сме #1 в Pazaruvaj
                 if (($product->pazaruvaj_offers_count ?? 0) < 2) return false;
                 if ((int) ($product->pazaruvaj_our_position ?? 0) !== 1) return false;
 
                 $ourPrice = (float) ($product->our_price ?? 0);
                 if ($ourPrice <= 0) return false;
 
-                // Следващата цена трябва да е > наша + 5€
                 $offers = collect($product->pazaruvaj_offers_list ?? [])
                     ->filter(fn ($o) => $o->price !== null && (float) $o->price > 0)
                     ->sortBy('price')
@@ -70,12 +70,14 @@ class ComparisonPriceUpSheet implements FromCollection, WithHeadings, WithTitle,
                     : null;
 
                 return [
-                    'product'     => $product->name,
-                    'our_price'   => $this->formatNumber($ourPrice),
-                    'next_price'  => $this->formatNumber($nextPrice),
-                    'next_store'  => $nextStore,
-                    'lead_euro'   => $this->formatNumber($leadEuro),
-                    'lead_percent'=> $this->formatNumber($leadPercent),
+                    'sku'          => $product->sku ?? '—',
+                    'product'      => $product->name,
+                    'pcd_price'    => $this->formatNumber($product->pcd_price),
+                    'our_price'    => $this->formatNumber($ourPrice),
+                    'next_price'   => $this->formatNumber($nextPrice),
+                    'next_store'   => $nextStore,
+                    'lead_euro'    => $this->formatNumber($leadEuro),
+                    'lead_percent' => $this->formatNumber($leadPercent),
                 ];
             })
             ->sortByDesc(fn ($r) => (float) ($r['lead_euro'] ?? 0))
