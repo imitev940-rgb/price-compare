@@ -171,24 +171,15 @@ class ImportProductsJob implements ShouldQueue
                         $importJob->increment('imported_count');
                     }
 
-                    $searchDelay = $index * 2;
-                    $priceDelay  = $index * 2 + 60;
-
-                    $priceQueue = ($productData['scan_priority'] ?? 'normal') === 'top'
-                        ? 'price_top'
-                        : 'price';
+                    // Delay по 1 минута между продукти за да не претоварва workers
+                    $searchDelay = $index * 60;
 
                     dispatch(
                         (new \App\Jobs\AutoSearchProductJob($product->id))
                             ->onQueue('search')
                             ->delay(now()->addSeconds($searchDelay))
                     );
-
-                    dispatch(
-                        (new \App\Jobs\PriceCheckProductJob($product->id))
-                            ->onQueue($priceQueue)
-                            ->delay(now()->addSeconds($priceDelay))
-                    );
+                    // PriceCheck се пуска автоматично от AutoSearchProductJob след намиране на линкове
 
                 } catch (\Throwable $e) {
                     $this->logError($importJob, $rowNumber, $row ?? [], $e->getMessage());
