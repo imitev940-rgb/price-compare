@@ -14,6 +14,18 @@ Schedule::command('prices:dispatch-due')
     ->withoutOverlapping()
     ->runInBackground();
 
+// ── Our Price - обнови всеки час ─────────────────────────────────────
+Schedule::command('prices:update-own --price')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// ── ПЦД - обнови веднъж дневно ───────────────────────────────────────
+Schedule::command('prices:update-own --pcd')
+    ->dailyAt('04:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // ── Почистване на стара история (по-стара от 90 дни) ────────────────
 Schedule::command('price-history:cleanup 90')
     ->daily()
