@@ -14,9 +14,9 @@ Schedule::command('prices:dispatch-due')
     ->withoutOverlapping()
     ->runInBackground();
 
-// ── Our Price - обнови всеки час ─────────────────────────────────────
+// ── Our Price - обнови на всеки 3 часа ───────────────────────────────
 Schedule::command('prices:update-own --price')
-    ->hourly()
+    ->everyThreeHours()
     ->withoutOverlapping()
     ->runInBackground();
 

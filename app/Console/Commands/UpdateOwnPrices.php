@@ -13,7 +13,7 @@ class UpdateOwnPrices extends Command
                             {--pcd    : Обнови само ПЦД цените}
                             {--price  : Обнови само Our Price}
                             {--all    : Обнови и двете}
-                            {--limit= : Максимален брой продукти (default: 999)}';
+                            {--limit=0 : Максимален брой продукти (0 = без лимит)}';
 
     protected $description = 'Обновява Our Price и/или ПЦД от technika.bg';
 
@@ -21,26 +21,33 @@ class UpdateOwnPrices extends Command
     {
         $updatePrice = $this->option('price') || $this->option('all');
         $updatePcd   = $this->option('pcd')   || $this->option('all');
-        $limit       = (int) ($this->option('limit') ?? 999);
+        $limit       = (int) $this->option('limit');
 
         if (!$updatePrice && !$updatePcd) {
-            // По подразбиране обнови само Our Price
             $updatePrice = true;
         }
+
+        $updated   = 0;
+        $failed    = 0;
+        $processed = 0;
 
         $query = Product::where('is_active', 1)
             ->whereNotNull('product_url')
             ->where('product_url', 'like', '%technika.bg%')
             ->orderBy('id');
 
-        $updated = 0;
-        $failed  = 0;
+        $query->chunkById(20, function ($products) use ($priceService, $updatePrice, $updatePcd, $limit, &$updated, &$failed, &$processed) {
 
-        $query->limit($limit)->chunk(10, function ($products) use ($priceService, $updatePrice, $updatePcd, &$updated, &$failed) {
             foreach ($products as $product) {
-                try {
-                    $data = $priceService->getPriceData($product->product_url);
 
+                if ($limit > 0 && $processed >= $limit) {
+                    return false;
+                }
+
+                $processed++;
+
+                try {
+                    $data    = $priceService->getPriceData($product->product_url);
                     $changes = [];
 
                     if ($updatePrice && isset($data['price']) && $data['price'] > 0) {
@@ -56,11 +63,6 @@ class UpdateOwnPrices extends Command
                     if (!empty($changes)) {
                         $product->update($changes);
                         $updated++;
-
-                        Log::info('UpdateOwnPrices updated', [
-                            'product_id' => $product->id,
-                            'changes'    => $changes,
-                        ]);
                     }
 
                 } catch (\Throwable $e) {
@@ -71,14 +73,15 @@ class UpdateOwnPrices extends Command
                     ]);
                 }
             }
-        });
+        }, 'id');
 
         Log::info('prices:update-own finished', [
-            'updated' => $updated,
-            'failed'  => $failed,
+            'updated'   => $updated,
+            'failed'    => $failed,
+            'processed' => $processed,
         ]);
 
-        $this->info("Done. Updated: {$updated}, Failed: {$failed}");
+        $this->info("Done. Updated: {$updated}, Failed: {$failed}, Processed: {$processed}");
 
         return self::SUCCESS;
     }
