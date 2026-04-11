@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 class DispatchDuePriceChecks extends Command
 {
     protected $signature = 'prices:dispatch-due
-                            {--limit=150  : Максимален брой jobs за dispatch}
+                            {--limit=500  : Максимален брой jobs за dispatch}
                             {--store=     : Само за конкретен магазин (напр. Techmart)}
                             {--force      : Dispatch без проверка дали е due}';
 

@@ -232,7 +232,8 @@ async function scrapePrice(url) {
         const page = await context.newPage();
         page.setDefaultTimeout(15000);
 
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        const gotoTimeout = storeKey === 'technomarket.bg' ? 60000 : 40000;
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: gotoTimeout });
         await page.waitForTimeout(1000);   // изчакай JS да зареди цените
 
         let price    = null;
@@ -321,12 +322,23 @@ async function scrapePrice(url) {
         process.exit(1);
     }
 
-    try {
-        const result = await scrapePrice(url);
-        process.stdout.write(JSON.stringify(result));
-        process.exit(result.price ? 0 : 1);
-    } catch (err) {
-        process.stdout.write(JSON.stringify({ price: null, error: err.message }));
-        process.exit(1);
+    const isThechnomarket = url.includes('technomarket.bg');
+    const maxRetries = isThechnomarket ? 2 : 1;
+    let lastErr = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await scrapePrice(url);
+            process.stdout.write(JSON.stringify(result));
+            process.exit(result.price ? 0 : 1);
+        } catch (err) {
+            lastErr = err;
+            if (attempt < maxRetries) {
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        }
     }
+
+    process.stdout.write(JSON.stringify({ price: null, error: lastErr?.message }));
+    process.exit(1);
 })();
