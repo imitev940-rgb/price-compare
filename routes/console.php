@@ -57,3 +57,4 @@ Schedule::command('products:auto-search --store=Zora --missing')
     ->dailyAt('03:30')
     ->withoutOverlapping()
     ->runInBackground();
+Schedule::command('prices:dispatch-due --store=Pazaruvaj')->everyMinute();
