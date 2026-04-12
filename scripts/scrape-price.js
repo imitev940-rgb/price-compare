@@ -46,7 +46,7 @@ const STORE_CONFIG = {
             '[itemprop="price"]',
         ],
         stock: ['.in-stock', '[class*="inStock"]', '.available'],
-        outStock: ['.out-of-stock', '[class*="outOfStock"]'],
+        outStock: ['.out-of-stock', '[class*="outOfStock"]', 'text=Продуктът не е в наличност'],
         currency: 'EUR',
     },
     'technomarket.bg': {
