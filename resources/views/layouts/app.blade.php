@@ -356,13 +356,14 @@
 
         notificationList.innerHTML = notifications.map(notification => {
             const createdAt = formatNotificationDate(notification.created_at);
-            const message = escapeHtml(notification.message || '');
+            const rawMessage = notification.message || '';
+            const message = escapeHtml(rawMessage);
             const isNew = newIds.includes(notification.id);
 
-            // Detect price direction
+            // Detect price direction from raw message (before escaping)
             let dirClass = '';
             let arrow = '';
-            const match = message.match(/([\d,.]+)\s*€\s*->\s*([\d,.]+)\s*€/);
+            const match = rawMessage.match(/([\d,.]+)\s*€\s*->\s*([\d,.]+)\s*€/);
             if (match) {
                 const oldP = parseFloat(match[1].replace(',', '.'));
                 const newP = parseFloat(match[2].replace(',', '.'));
