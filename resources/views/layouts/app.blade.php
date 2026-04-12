@@ -41,7 +41,9 @@
 <div class="dashboard-layout">
     <aside class="sidebar">
         <div class="sidebar-top">
-            <img src="{{ asset('images/logo.png') }}" alt="{{ $systemName }}" class="sidebar-logo">
+            <a href="/comparison">
+                <img src="{{ asset('images/logo.png') }}" alt="{{ $systemName }}" class="sidebar-logo">
+            </a>
         </div>
 
         <nav class="sidebar-nav">

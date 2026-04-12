@@ -23,7 +23,7 @@
 
 <div class="cmp-toolbar-shell">
     <form method="GET" class="cmp-toolbar-form" id="storesSearchForm">
-        <div class="cmp-toolbar-main">
+        <div class="cmp-toolbar-main" style="justify-content: center;">
             <div class="cmp-toolbar-field cmp-toolbar-field-search cmp-toolbar-field-search-compact">
                 <label class="cmp-toolbar-label">{{ __('messages.search') }}</label>
                 <input
@@ -126,15 +126,25 @@
         const searchForm = document.getElementById('storesSearchForm');
 
         if (searchInput && searchForm) {
-            searchInput.addEventListener('input', function () {
-                clearTimeout(storesSearchTimeout);
-
-                storesSearchTimeout = setTimeout(() => {
-                    searchForm.submit();
-                }, 500);
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                searchForm.submit();
             });
         }
     });
 </script>
+
+<style>
+.cmp-toolbar-main {
+    display: flex;
+    justify-content: center !important;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.cmp-toolbar-field-search-compact {
+    min-width: 350px;
+}
+</style>
 
 @endsection

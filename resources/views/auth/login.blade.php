@@ -70,7 +70,7 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      padding: 32px 52px 74px; /* ticker space */
+      padding: 32px 52px;
     }
 
     /* subtle page glows */
@@ -479,23 +479,7 @@
 </head>
 
 <body>
-  <div class="ticker-bar">
-    <div class="ticker-track">
-      <span class="ticker-item"><span class="t-dot up"></span>Technomarket — €434 <span class="t-pct up">▲2.4%</span></span>
-      <span class="ticker-item"><span class="t-dot dn"></span>Technopolis — €639 <span class="t-pct dn">▼1.1%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Zora — €409 <span class="t-pct up">▲3.7%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Pazaruvaj — €415 <span class="t-pct up">▲0.9%</span></span>
-      <span class="ticker-item"><span class="t-dot dn"></span>eMAG — €562 <span class="t-pct dn">▼1.2%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Ardes — €450 <span class="t-pct up">▲0.5%</span></span>
 
-      <span class="ticker-item"><span class="t-dot up"></span>Technomarket — €434 <span class="t-pct up">▲2.4%</span></span>
-      <span class="ticker-item"><span class="t-dot dn"></span>Technopolis — €639 <span class="t-pct dn">▼1.1%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Zora — €409 <span class="t-pct up">▲3.7%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Pazaruvaj — €415 <span class="t-pct up">▲0.9%</span></span>
-      <span class="ticker-item"><span class="t-dot dn"></span>eMAG — €562 <span class="t-pct dn">▼1.2%</span></span>
-      <span class="ticker-item"><span class="t-dot up"></span>Ardes — €450 <span class="t-pct up">▲0.5%</span></span>
-    </div>
-  </div>
 
   <div class="auth-page">
     <div class="auth-glow auth-glow-1"></div>

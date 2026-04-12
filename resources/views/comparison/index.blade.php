@@ -717,10 +717,11 @@
 
         const searchInput = document.querySelector('input[name="search"]');
         if (searchInput) {
-            searchInput.addEventListener('input', function () {
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
                 clearTimeout(searchTimeout);
 
-                searchTimeout = setTimeout(() => {
+                // submit immediately
                     const form = this.closest('form');
                     if (form) form.submit();
                 }, 500);
