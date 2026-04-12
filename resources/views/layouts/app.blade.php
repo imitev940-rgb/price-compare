@@ -359,9 +359,25 @@
             const message = escapeHtml(notification.message || '');
             const isNew = newIds.includes(notification.id);
 
+            // Detect price direction
+            let dirClass = '';
+            let arrow = '';
+            const match = message.match(/([\d,.]+)\s*€\s*->\s*([\d,.]+)\s*€/);
+            if (match) {
+                const oldP = parseFloat(match[1].replace(',', '.'));
+                const newP = parseFloat(match[2].replace(',', '.'));
+                if (newP > oldP) {
+                    dirClass = 'notif-up';
+                    arrow = '▲ ';
+                } else if (newP < oldP) {
+                    dirClass = 'notif-down';
+                    arrow = '▼ ';
+                }
+            }
+
             return `
-                <div class="notification-item ${notification.is_read ? 'is-read' : 'is-unread'} ${isNew ? 'is-new-highlight' : ''}">
-                    <div class="notification-message">${message}</div>
+                <div class="notification-item ${notification.is_read ? 'is-read' : 'is-unread'} ${isNew ? 'is-new-highlight' : ''} ${dirClass}">
+                    <div class="notification-message">${arrow}${message}</div>
                     <div class="notification-date">${createdAt}</div>
                 </div>
             `;

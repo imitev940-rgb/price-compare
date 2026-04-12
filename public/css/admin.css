@@ -1449,6 +1449,17 @@ tr:hover td {
     background: #ffffff;
 }
  
+.notification-item.notif-up {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+}
+.notification-item.notif-up .notification-message { color: #dc2626; }
+.notification-item.notif-down {
+    border-left: 3px solid #22c55e;
+    background: #f0fdf4;
+}
+.notification-item.notif-down .notification-message { color: #16a34a; }
+
 .notification-item.is-new-highlight {
     animation: newNotificationFlash 2.4s ease;
 }
@@ -2322,7 +2333,18 @@ body.dark-mode .notification-item:hover {
     background: #172033;
 }
  
-body.dark-mode .notification-item.is-new-highlight {
+body.dark-mode .notification-item.notif-up {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+}
+.notification-item.notif-up .notification-message { color: #dc2626; }
+.notification-item.notif-down {
+    border-left: 3px solid #22c55e;
+    background: #f0fdf4;
+}
+.notification-item.notif-down .notification-message { color: #16a34a; }
+
+.notification-item.is-new-highlight {
     animation: newNotificationFlashDark 2.4s ease;
 }
  

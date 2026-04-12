@@ -599,7 +599,7 @@ class CheckCompetitorPrices extends Command
 
     protected function formatPriceText(?float $price): string
     {
-        return $price !== null ? number_format($price, 2, '.', '') . ' EUR' : 'няма цена';
+        return $price !== null ? number_format($price, 2, '.', '') . ' €' : 'няма цена';
     }
 
     // ================================================================
