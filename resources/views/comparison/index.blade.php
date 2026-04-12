@@ -719,12 +719,8 @@
         if (searchInput) {
             searchInput.addEventListener('keydown', function (e) {
                 if (e.key !== 'Enter') return;
-                clearTimeout(searchTimeout);
-
-                // submit immediately
-                    const form = this.closest('form');
-                    if (form) form.submit();
-                }, 500);
+                const form = this.closest('form');
+                if (form) form.submit();
             });
         }
 
