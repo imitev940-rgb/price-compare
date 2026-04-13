@@ -17,7 +17,7 @@ class PriceCheckLinkJob implements ShouldQueue
     use Queueable, InteractsWithQueue, SerializesModels;
 
     public int $tries   = 2;
-    public int $timeout = 60;   // ↓ от 900 — Playwright: 5-10 сек, HTTP: 20-30 сек
+    public int $timeout = 120;   // ↓ от 900 — Playwright: 5-10 сек, HTTP: 20-30 сек
 
     public function __construct(public int $linkId)
     {
