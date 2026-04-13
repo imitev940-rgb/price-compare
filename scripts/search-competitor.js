@@ -255,9 +255,9 @@ async function searchStore(storeName, query) {
     // Proxy само за Zora (блокира VPS IP)
     const useProxy = storeName === 'zora';
     const proxyConfig = useProxy ? {
-        server:   'http://proxy.geonode.io:9000',
-        username: 'geonode_MqmhN3J0yI-type-residential',
-        password: '885869de-b160-4498-9287-b08c0a7f1bf3',
+        server:   'http://96.62.180.188:7898',
+        username: 'tumdzdvc',
+        password: '9zbgvzfgy3yp',
     } : undefined;
 
     const browser = await chromium.launch({
