@@ -255,9 +255,9 @@ async function searchStore(storeName, query) {
     // Proxy само за Zora (блокира VPS IP)
     const useProxy = storeName === 'zora';
     const proxyConfig = useProxy ? {
-        server:   'http://31.59.20.176:6754',
-        username: 'tumdzdvc',
-        password: '9zbgvzfgy3yp',
+        server:   'http://proxy.geonode.io:9000',
+        username: 'geonode_MqmhN3J0yI-type-residential',
+        password: '885869de-b160-4498-9287-b08c0a7f1bf3',
     } : undefined;
 
     const browser = await chromium.launch({
@@ -289,8 +289,8 @@ async function searchStore(storeName, query) {
         });
 
         const page = await context.newPage();
-        page.setDefaultTimeout(15000);
-        page.setDefaultNavigationTimeout(20000);
+        page.setDefaultTimeout(30000);
+        page.setDefaultNavigationTimeout(40000);
 
         // ── Директен Search URL (Technomarket, Tehnomix) ─────────────────────
         if (config.directSearchUrl) {
