@@ -200,6 +200,13 @@ async function scrapePrice(url) {
     const storeKey = detectStore(url);
     const config   = storeKey ? STORE_CONFIG[storeKey] : null;
 
+    const isZora = url.includes('zora.bg');
+    const proxyConfig = isZora ? {
+        server: 'http://proxy.geonode.io:9000',
+        username: 'geonode_MqmhN3J0yI-type-residential',
+        password: '885869de-b160-4498-9287-b08c0a7f1bf3',
+    } : undefined;
+
     const browser = await chromium.launch({
         headless: true,
         args: [
@@ -213,7 +220,7 @@ async function scrapePrice(url) {
     });
 
     try {
-        const context = await browser.newContext({
+        const context = await browser.newContext({ ...(isZora && proxyConfig ? { proxy: proxyConfig } : {}),
             locale:    'bg-BG',
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         });
