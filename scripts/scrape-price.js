@@ -96,6 +96,36 @@ const STORE_CONFIG = {
 
 const BGN_TO_EUR = 1.95583;
 
+// FlareSolverr за Tehnomix
+async function scrapeWithFlareSolverr(url) {
+    const port = Math.random() < 0.5 ? 8191 : 8192;
+    const response = await fetch(`http://localhost:${port}/v1`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd: 'request.get', url, maxTimeout: 60000 })
+    });
+    const data = await response.json();
+    if (data.status !== 'ok' || data.solution.status !== 200) {
+        throw new Error('FlareSolverr failed: ' + data.status);
+    }
+    const html = data.solution.response;
+    
+    let price = null;
+    const priceMatch = html.match(/product:price:amount"\s+content="([\d.]+)"/);
+    if (priceMatch) price = parseFloat(priceMatch[1]);
+    
+    if (!price) {
+        const priceMatch2 = html.match(/data-price-type="finalPrice"[^>]*data-price-amount="([\d.]+)"/);
+        if (priceMatch2) price = parseFloat(priceMatch2[1]);
+    }
+
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+    const title = titleMatch ? titleMatch[1].trim() : null;
+    const inStock = html.includes('stock available') ? true : (html.includes('stock unavailable') ? false : null);
+
+    return { price, title, inStock };
+}
+
 // ── Помощни функции ──────────────────────────────────────────────────────────
 
 function detectStore(url) {
@@ -201,6 +231,20 @@ function extractPriceFromMeta(html) {
 async function scrapePrice(url) {
     const storeKey = detectStore(url);
     const config   = storeKey ? STORE_CONFIG[storeKey] : null;
+
+    if (url.includes('tehnomix.bg')) {
+        try {
+            const result = await scrapeWithFlareSolverr(url);
+            if (result.price) {
+                console.log(JSON.stringify({ price: result.price, currency: 'EUR', in_stock: result.inStock, title: result.title }));
+            } else {
+                console.log(JSON.stringify({ price: null, error: 'Price not found', title: result.title }));
+            }
+        } catch (e) {
+            console.log(JSON.stringify({ price: null, error: e.message }));
+        }
+        process.exit(0);
+    }
 
     const isZora = url.includes('zora.bg');
     const proxyConfig = isZora ? {
