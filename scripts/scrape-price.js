@@ -87,6 +87,8 @@ const STORE_CONFIG = {
             '[class*="unavailable"]',
             'button:has-text("Изчерпан")',
             'button:has-text("Няма")',
+            'text=Продуктът е изчерпан онлайн',
+            'text=изчерпан онлайн',
         ],
         currency: 'EUR',
     },
