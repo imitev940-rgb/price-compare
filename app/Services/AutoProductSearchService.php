@@ -289,15 +289,14 @@ class AutoProductSearchService
 
         foreach (array_slice($this->buildProgressiveQueries($product), 0, 16) as $query) {
             try {
-                $resp = Http::timeout(20)
-                    ->withHeaders($this->headers('https://www.pazaruvaj.com/'))
-                    ->get('https://www.pazaruvaj.com/CategorySearch.php?st=' . urlencode($query));
+                $searchUrl = 'https://www.pazaruvaj.com/CategorySearch.php?st=' . urlencode($query);
+                $html = $this->fetchPazaruvajHtml($searchUrl);
 
-                if (! $resp->successful()) {
+                if (!$html) {
                     continue;
                 }
 
-                preg_match_all('/https:\/\/www\.pazaruvaj\.com\/p\/[^"\'<>\s]+/i', $resp->body(), $m);
+                preg_match_all('/https:\/\/www\.pazaruvaj\.com\/p\/[^"\'<>\s]+/i', $html, $m);
 
                 foreach (array_values(array_unique($m[0] ?? [])) as $candidate) {
                     $u = $this->cleanUrl($candidate);
@@ -310,7 +309,7 @@ class AutoProductSearchService
                     }
 
                     if ($s >= self::SCORE_ACCEPT) {
-                        $html = $this->fetchHtml($u, 'https://www.pazaruvaj.com/');
+                        $html = $this->fetchPazaruvajHtml($u);
                         [$ps] = $this->computeMatchScore($u, (string) $html, $product);
 
                         if ($ps >= self::SCORE_ACCEPT) {
@@ -324,7 +323,7 @@ class AutoProductSearchService
         }
 
         if ($bestUrl && $bestScore >= self::SCORE_FALLBACK) {
-            $html = $this->fetchHtml($bestUrl, 'https://www.pazaruvaj.com/');
+            $html = $this->fetchPazaruvajHtml($bestUrl);
             [$ps] = $this->computeMatchScore($bestUrl, (string) $html, $product);
 
             if ($ps >= self::SCORE_FALLBACK) {
@@ -339,6 +338,34 @@ class AutoProductSearchService
     // ================================================================
     // FETCH HTML (само за Pazaruvaj)
     // ================================================================
+
+    protected function fetchPazaruvajHtml(string $url): ?string
+    {
+        try {
+            $scriptPath = base_path('scripts/fetch-pazaruvaj.js');
+            $cmd = sprintf('timeout 45 node %s %s 2>/dev/null', escapeshellarg($scriptPath), escapeshellarg($url));
+            $output = shell_exec($cmd);
+
+            if (!$output) {
+                return null;
+            }
+
+            $data = json_decode(trim($output), true);
+            if (!is_array($data) || empty($data['html'])) {
+                return null;
+            }
+
+            $status = $data['status'] ?? 0;
+            if ($status < 200 || $status >= 300) {
+                return null;
+            }
+
+            return $data['html'];
+        } catch (\Throwable $e) {
+            Log::debug('fetchPazaruvajHtml failed', ['url' => $url, 'message' => $e->getMessage()]);
+            return null;
+        }
+    }
 
     protected function fetchHtml(string $url, string $referer = ''): ?string
     {

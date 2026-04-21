@@ -16,8 +16,8 @@ class PriceCheckLinkJob implements ShouldQueue
 {
     use Queueable, InteractsWithQueue, SerializesModels;
 
-    public int $tries   = 2;
-    public int $timeout = 180;   // ↓ от 900 — Playwright: 5-10 сек, HTTP: 20-30 сек
+    public int $tries   = 3;
+    public int $timeout = 120;   // ↓ от 900 — Playwright: 5-10 сек, HTTP: 20-30 сек
 
     public function __construct(public int $linkId)
     {
@@ -26,7 +26,7 @@ class PriceCheckLinkJob implements ShouldQueue
 
     public function backoff(): array
     {
-        return [15, 30];   // ↓ от [15, 60]
+        return [15, 30, 60];
     }
 
     public function handle(
@@ -88,6 +88,13 @@ class PriceCheckLinkJob implements ShouldQueue
     public function failed(\Throwable $e): void
     {
         Cache::forget('price_check_dispatching:' . $this->linkId);
+        Cache::forget('price-check-link-' . $this->linkId);
+
+        \App\Models\CompetitorLink::where('id', $this->linkId)->update([
+            'last_checked_at' => now(),
+            'search_status'   => 'error',
+            'last_error'      => mb_substr($e->getMessage(), 0, 255),
+        ]);
 
         Log::error('PriceCheckLinkJob failed', [
             'link_id' => $this->linkId,

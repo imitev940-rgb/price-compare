@@ -164,14 +164,23 @@ class PazaruvajScraperService
 
     protected function makeRequest(string $url)
     {
-        return Http::timeout(25)
-            ->withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
-                'Accept-Language' => 'bg-BG,bg;q=0.9,en;q=0.8',
-                'Cache-Control' => 'no-cache',
-                'Pragma' => 'no-cache',
-            ])
-            ->get($url);
+        $scriptPath = base_path('scripts/fetch-pazaruvaj.js');
+        $cmd = sprintf('timeout 45 node %s %s 2>/dev/null', escapeshellarg($scriptPath), escapeshellarg($url));
+        $output = shell_exec($cmd);
+
+        if (!$output) {
+            return new \Illuminate\Http\Client\Response(
+                new \GuzzleHttp\Psr7\Response(500, [], '')
+            );
+        }
+
+        $data = json_decode(trim($output), true);
+        $status = $data['status'] ?? 500;
+        $html = $data['html'] ?? '';
+
+        return new \Illuminate\Http\Client\Response(
+            new \GuzzleHttp\Psr7\Response($status, [], $html)
+        );
     }
 
     protected function resolveWorkingUrl(Product $product, string $url): ?string

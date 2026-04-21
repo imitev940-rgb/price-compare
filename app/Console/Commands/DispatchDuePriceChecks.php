@@ -42,7 +42,9 @@ class DispatchDuePriceChecks extends Command
             $query->whereHas('store', fn ($q) => $q->whereRaw('LOWER(name) = ?', [$storeFilter]));
         }
 
-        $query->chunkById($limit, function ($links) use (&$dispatched, $limit, $now, $force) {
+        $storeCounters = [];
+
+        $query->chunkById($limit, function ($links) use (&$dispatched, &$storeCounters, $limit, $now, $force) {
             foreach ($links as $link) {
                 if ($dispatched >= $limit) {
                     return false;
@@ -80,8 +82,15 @@ class DispatchDuePriceChecks extends Command
 
                 $queueName = $priority === 'top' ? 'price_top' : 'price';
 
+                $storeCounters[$storeName] = ($storeCounters[$storeName] ?? 0) + 1;
+                $delayMultiplier = in_array($storeName, ['zora', 'tehnomix']) ? 5 
+                    : ($storeName === 'pazaruvaj' ? 3 : 1);
+                $delaySeconds = ($storeCounters[$storeName] - 1) * $delayMultiplier;
+
                 dispatch(
-                    (new PriceCheckLinkJob($link->id))->onQueue($queueName)
+                    (new PriceCheckLinkJob($link->id))
+                        ->onQueue($queueName)
+                        ->delay(now()->addSeconds($delaySeconds))
                 );
 
                 $dispatched++;

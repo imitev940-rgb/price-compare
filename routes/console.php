@@ -33,28 +33,33 @@ Schedule::command('price-history:cleanup 90')
     ->withoutOverlapping();
 
 // ── Auto search за продукти без линкове (всяка нощ) ─────────────────
-Schedule::command('products:auto-search --store=Techmart --missing')
+Schedule::command('products:auto-search --store=Techmart')
     ->dailyAt('01:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-Schedule::command('products:auto-search --store=Technopolis --missing')
+Schedule::command('products:auto-search --store=Technopolis')
     ->dailyAt('01:30')
     ->withoutOverlapping()
     ->runInBackground();
 
-Schedule::command('products:auto-search --store=Technomarket --missing')
+Schedule::command('products:auto-search --store=Technomarket')
     ->dailyAt('02:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-Schedule::command('products:auto-search --store=Tehnomix --missing')
+Schedule::command('products:auto-search --store=Tehnomix')
     ->dailyAt('02:30')
     ->withoutOverlapping()
     ->runInBackground();
 
-Schedule::command('products:auto-search --store=Zora --missing')
+Schedule::command('products:auto-search --store=Zora')
     ->dailyAt('03:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('products:auto-search --store=Pazaruvaj')
+    ->dailyAt('04:30')
     ->withoutOverlapping()
     ->runInBackground();
 Schedule::command('prices:dispatch-due --store=Pazaruvaj')->everyMinute();

@@ -156,6 +156,11 @@ class CheckCompetitorPrices extends Command
         }
 
         if (isset($result['error'])) {
+            // "Price not found" => throw exception за automatic retry
+            if ($result['error'] === 'Price not found') {
+                throw new \RuntimeException('Price not found on ' . $url);
+            }
+
             $link->update([
                 'last_checked_at' => now(),
                 'search_status'   => 'error',
@@ -227,9 +232,14 @@ class CheckCompetitorPrices extends Command
 
     protected function fetchPriceViaPlaywright(string $url): array
     {
-        if (! file_exists($this->scriptPath)) {
-            Log::error('scrape-price.js not found', ['path' => $this->scriptPath]);
-            return ['error' => 'scrape-price.js not found'];
+        // Специален script за Zora (с proxy)
+        $scriptPath = str_contains($url, 'zora.bg')
+            ? base_path('scripts/scrape-zora.js')
+            : $this->scriptPath;
+
+        if (! file_exists($scriptPath)) {
+            Log::error('scraper script not found', ['path' => $scriptPath]);
+            return ['error' => 'scraper script not found'];
         }
 
         // Mac използва gtimeout (brew install coreutils), Linux използва timeout
@@ -238,7 +248,7 @@ class CheckCompetitorPrices extends Command
         $cmd    = sprintf(
             '%s 60 node %s %s 2>/dev/null',
             $timeoutCmd,
-            escapeshellarg($this->scriptPath),
+            escapeshellarg($scriptPath),
             escapeshellarg($url)
         );
 
