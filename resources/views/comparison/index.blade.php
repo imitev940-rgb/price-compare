@@ -314,8 +314,17 @@
                     </td>
 
                     <td class="cmp-price col-technopolis">
+                        @php
+                            $link_technopolis = $product->competitorLinks->first(fn($l) => strtolower($l->store->name ?? '') === 'technopolis');
+                            $oos_technopolis = $link_technopolis && $link_technopolis->search_status === 'out_of_stock';
+                        @endphp
                         @if($product->technopolis_price !== null)
-                            {{ number_format((float) $product->technopolis_price, 2) }}
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                {{ number_format((float) $product->technopolis_price, 2) }}
+                                @if($oos_technopolis)
+                                    <span title="Продуктът е изчерпан" style="color:#f59e0b; font-size:13px;">⚠️</span>
+                                @endif
+                            </span>
                         @else
                             —
                         @endif
@@ -346,8 +355,17 @@
                     </td>
 
                     <td class="cmp-price col-technomarket">
+                        @php
+                            $link_technomarket = $product->competitorLinks->first(fn($l) => strtolower($l->store->name ?? '') === 'technomarket');
+                            $oos_technomarket = $link_technomarket && $link_technomarket->search_status === 'out_of_stock';
+                        @endphp
                         @if($product->technomarket_price !== null)
-                            {{ number_format((float) $product->technomarket_price, 2) }}
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                {{ number_format((float) $product->technomarket_price, 2) }}
+                                @if($oos_technomarket)
+                                    <span title="Продуктът е изчерпан" style="color:#f59e0b; font-size:13px;">⚠️</span>
+                                @endif
+                            </span>
                         @else
                             —
                         @endif
@@ -378,8 +396,17 @@
                     </td>
 
                     <td class="cmp-price col-techmart">
+                        @php
+                            $link_techmart = $product->competitorLinks->first(fn($l) => strtolower($l->store->name ?? '') === 'techmart');
+                            $oos_techmart = $link_techmart && $link_techmart->search_status === 'out_of_stock';
+                        @endphp
                         @if($product->techmart_price !== null)
-                            {{ number_format((float) $product->techmart_price, 2) }}
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                {{ number_format((float) $product->techmart_price, 2) }}
+                                @if($oos_techmart)
+                                    <span title="Продуктът е изчерпан" style="color:#f59e0b; font-size:13px;">⚠️</span>
+                                @endif
+                            </span>
                         @else
                             —
                         @endif
@@ -410,8 +437,17 @@
                     </td>
 
                     <td class="cmp-price col-tehnomix">
+                        @php
+                            $link_tehnomix = $product->competitorLinks->first(fn($l) => strtolower($l->store->name ?? '') === 'tehnomix');
+                            $oos_tehnomix = $link_tehnomix && $link_tehnomix->search_status === 'out_of_stock';
+                        @endphp
                         @if($product->tehnomix_price !== null)
-                            {{ number_format((float) $product->tehnomix_price, 2) }}
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                {{ number_format((float) $product->tehnomix_price, 2) }}
+                                @if($oos_tehnomix)
+                                    <span title="Продуктът е изчерпан" style="color:#f59e0b; font-size:13px;">⚠️</span>
+                                @endif
+                            </span>
                         @else
                             —
                         @endif
@@ -442,8 +478,17 @@
                     </td>
 
                     <td class="cmp-price col-zora">
+                        @php
+                            $link_zora = $product->competitorLinks->first(fn($l) => strtolower($l->store->name ?? '') === 'zora');
+                            $oos_zora = $link_zora && $link_zora->search_status === 'out_of_stock';
+                        @endphp
                         @if($product->zora_price !== null)
-                            {{ number_format((float) $product->zora_price, 2) }}
+                            <span style="display:inline-flex; align-items:center; gap:4px;">
+                                {{ number_format((float) $product->zora_price, 2) }}
+                                @if($oos_zora)
+                                    <span title="Продуктът е изчерпан" style="color:#f59e0b; font-size:13px;">⚠️</span>
+                                @endif
+                            </span>
                         @else
                             —
                         @endif

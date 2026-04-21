@@ -112,6 +112,7 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     // NOTIFICATIONS
     // ===============================
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/all', [NotificationController::class, 'showAll'])->name('notifications.all');
     Route::post('/notifications/clear', [NotificationController::class, 'clearAll'])->name('notifications.clear');
 
     // ===============================

@@ -575,13 +575,17 @@ class CheckCompetitorPrices extends Command
         $newPrice    = $newPrice !== null ? round((float) $newPrice, 2) : null;
         $productName = $link->product->name ?? 'Продукт';
         $message     = null;
+        $percent     = null;
 
         if ($oldPrice === null && $newPrice !== null) {
             $message = 'Нова цена: ' . $productName . ' в ' . $storeName . ' - ' . $this->formatPriceText($newPrice);
         } elseif ($oldPrice !== null && $newPrice === null) {
             $message = 'Цена вече не е налична: ' . $productName . ' в ' . $storeName;
         } elseif ($oldPrice !== null && $newPrice !== null && $oldPrice !== $newPrice) {
-            $message = 'Промяна в цена: ' . $productName . ' в ' . $storeName . ' - ' . $this->formatPriceText($oldPrice) . ' -> ' . $this->formatPriceText($newPrice);
+            $percent = $oldPrice > 0 ? round((($newPrice - $oldPrice) / $oldPrice) * 100, 2) : null;
+            $sign    = $percent !== null && $percent > 0 ? '+' : '';
+            $percentText = $percent !== null ? ' (' . $sign . $percent . '%)' : '';
+            $message = 'Промяна в цена: ' . $productName . ' в ' . $storeName . ' - ' . $this->formatPriceText($oldPrice) . ' -> ' . $this->formatPriceText($newPrice) . $percentText;
         }
 
         if (! $message) {
@@ -600,10 +604,14 @@ class CheckCompetitorPrices extends Command
         }
 
         Notification::create([
-            'product_id' => $link->product_id,
-            'type'       => 'price_changed',
-            'message'    => $message,
-            'is_read'    => false,
+            'product_id'           => $link->product_id,
+            'store_id'             => $link->store_id,
+            'type'                 => 'price_changed',
+            'message'              => $message,
+            'old_price'            => $oldPrice,
+            'new_price'            => $newPrice,
+            'price_change_percent' => $percent,
+            'is_read'              => false,
         ]);
     }
 

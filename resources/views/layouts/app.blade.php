@@ -106,6 +106,14 @@
                     </select>
                 </div>
 
+                <a href="{{ route('tv.dashboard') }}" class="topbar-icon" title="TV Dashboard" aria-label="TV Dashboard">
+                    <i data-lucide="tv"></i>
+                </a>
+
+                <a href="{{ route('scan.dashboard') }}" class="topbar-icon" title="Scan Dashboard" aria-label="Scan Dashboard">
+                    <i data-lucide="activity"></i>
+                </a>
+
                 <button class="topbar-icon" id="themeToggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
                     <i data-lucide="moon"></i>
                 </button>
@@ -122,6 +130,7 @@
                                 {{ __('messages.notifications') }}
                             </div>
 
+                            
                             <button id="markAllNotificationsRead"
                                     class="mark-all-read-btn"
                                     type="button">
@@ -133,6 +142,9 @@
                             <div class="notification-loading">
                                 {{ __('messages.loading') }}
                             </div>
+                        </div>
+                        <div class="notification-dropdown-footer" style="text-align: center; padding: 16px; border-top: 1px solid #e5e7eb; background: #f9fafb; position: sticky; bottom: 0;">
+                            <a href="{{ route('notifications.all') }}" style="color: #3b82f6; text-decoration: none; font-weight: 600; font-size: 14px; display: block;">View all</a>
                         </div>
                     </div>
                 </div>
