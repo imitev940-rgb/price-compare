@@ -90,8 +90,10 @@ class PriceCheckLinkJob implements ShouldQueue
         Cache::forget('price_check_dispatching:' . $this->linkId);
         Cache::forget('price-check-link-' . $this->linkId);
 
+        // Записваме last_checked_at 2ч 30мин назад, за да опитаме отново след ~30 мин
+        // (вместо да чакаме пълния cycle от 3 часа)
         \App\Models\CompetitorLink::where('id', $this->linkId)->update([
-            'last_checked_at' => now(),
+            'last_checked_at' => now()->subMinutes(150),
             'search_status'   => 'error',
             'last_error'      => mb_substr($e->getMessage(), 0, 255),
         ]);

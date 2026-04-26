@@ -232,13 +232,23 @@ async function scrapePrice(url) {
     const storeKey = detectStore(url);
     const config   = storeKey ? STORE_CONFIG[storeKey] : null;
 
-    if (url.includes('tehnomix.bg')) {
+    if (url.includes('tehnomix.bg') || url.includes('zora.bg')) {
         try {
-            const result = await scrapeWithFlareSolverr(url);
-            if (result.price) {
-                console.log(JSON.stringify({ price: result.price, currency: 'EUR', in_stock: result.inStock, title: result.title }));
+            // Random delay 3-8s for Zora to avoid burst rate limiting
+            if (url.includes('zora.bg')) {
+                const delay = 3000 + Math.floor(Math.random() * 5000);
+                await new Promise(r => setTimeout(r, delay));
+            }
+            const workerUrl = 'https://tehnomix-scraper.ivanmitev4555.workers.dev/?url=' + encodeURIComponent(url);
+            const resp = await fetch(workerUrl, {
+                headers: { 'x-api-key': 'pricehunter-secret-2026-xyz789' }
+            });
+            const data = await resp.json();
+            if (data.price) {
+                const inStock = data.in_stock !== undefined ? data.in_stock : true;
+                console.log(JSON.stringify({ price: data.price, currency: 'EUR', in_stock: inStock, title: data.title }));
             } else {
-                console.log(JSON.stringify({ price: null, error: 'Price not found', title: result.title }));
+                console.log(JSON.stringify({ price: null, error: data.error || 'Price not found', title: data.title }));
             }
         } catch (e) {
             console.log(JSON.stringify({ price: null, error: e.message }));
@@ -247,7 +257,8 @@ async function scrapePrice(url) {
     }
 
     const isZora = url.includes('zora.bg');
-    const proxyConfig = isZora ? {
+    const needsProxy = isZora;
+    const proxyConfig = needsProxy ? {
         server: 'http://96.62.180.188:7898',
         username: 'tumdzdvc',
         password: '9zbgvzfgy3yp',
@@ -266,7 +277,7 @@ async function scrapePrice(url) {
     });
 
     try {
-        const context = await browser.newContext({ ...(isZora && proxyConfig ? { proxy: proxyConfig } : {}),
+        const context = await browser.newContext({ ...(needsProxy && proxyConfig ? { proxy: proxyConfig } : {}),
             locale:    'bg-BG',
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         });

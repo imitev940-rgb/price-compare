@@ -81,13 +81,24 @@ class NotificationController extends Controller
             $query->whereHas('product', fn($q) => $q->where('name', 'like', "%$search%"));
         }
 
-        $all = $query->latest()->get();
+        $allForStats = (clone $query)->get();
+        $all = $allForStats;  // за статистики
 
         // Статистики
         $cheaper = $all->where('price_change_percent', '<', 0)->count();
         $pricier = $all->where('price_change_percent', '>', 0)->count();
 
-        $byStore = $all->groupBy(fn($n) => $n->store?->name ?? 'Неопределен')
+        $byStore = $all->groupBy(function($n) {
+                // Pazaruvaj sub-store (MallBG, Top Mall, etc.)
+                if ($n->pazaruvaj_store) {
+                    return $n->pazaruvaj_store;
+                }
+                // Normal store от relation
+                if ($n->store?->name) {
+                    return $n->store->name;
+                }
+                return 'Неопределен';
+            })
             ->map(function ($items) {
                 $percents = $items->pluck('price_change_percent')->filter(fn($p) => $p !== null);
                 return [
@@ -124,8 +135,10 @@ class NotificationController extends Controller
 
         $stores = \App\Models\Store::orderBy('name')->get(['id','name']);
 
+        $paginated = $query->latest()->paginate(20);
+
         return view('notifications.index', [
-            'notifications' => $all,
+            'notifications' => $paginated,
             'summary'       => $summary,
             'stores'        => $stores,
             'filters'       => $request->only(['store_id','period','search']),

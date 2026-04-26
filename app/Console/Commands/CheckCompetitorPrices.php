@@ -438,7 +438,8 @@ class CheckCompetitorPrices extends Command
                     $link,
                     $oldPrice,
                     $lowestPrice,
-                    $lowestStoreName . ' (чрез Pazaruvaj)'
+                    $lowestStoreName . ' (чрез Pazaruvaj)',
+                    $lowestStoreName
                 );
             }
 
@@ -569,7 +570,7 @@ class CheckCompetitorPrices extends Command
         ]);
     }
 
-    protected function createPriceNotification(CompetitorLink $link, $oldPrice, $newPrice, string $storeName): void
+    protected function createPriceNotification(CompetitorLink $link, $oldPrice, $newPrice, string $storeName, ?string $pazaruvajStore = null): void
     {
         $oldPrice    = $oldPrice !== null ? round((float) $oldPrice, 2) : null;
         $newPrice    = $newPrice !== null ? round((float) $newPrice, 2) : null;
@@ -606,6 +607,7 @@ class CheckCompetitorPrices extends Command
         Notification::create([
             'product_id'           => $link->product_id,
             'store_id'             => $link->store_id,
+            'pazaruvaj_store'      => $pazaruvajStore,
             'type'                 => 'price_changed',
             'message'              => $message,
             'old_price'            => $oldPrice,
