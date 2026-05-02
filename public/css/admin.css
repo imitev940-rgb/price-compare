@@ -1159,11 +1159,11 @@ tr:hover td {
     border-radius: 10px;
     cursor: pointer;
     font-weight: 700;
-    color: #dc2626;
+    color: #16a34a;
 }
  
 .dropdown-logout-btn:hover {
-    background: #fef2f2;
+    background: #f0fdf4;
 }
  
 .dashboard-footer {
@@ -1450,15 +1450,15 @@ tr:hover td {
 }
  
 .notification-item.notif-up {
-    border-left: 3px solid #ef4444;
-    background: #fef2f2;
-}
-.notification-item.notif-up .notification-message { color: #dc2626; }
-.notification-item.notif-down {
     border-left: 3px solid #22c55e;
     background: #f0fdf4;
 }
-.notification-item.notif-down .notification-message { color: #16a34a; }
+.notification-item.notif-up .notification-message { color: #16a34a; }
+.notification-item.notif-down {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+}
+.notification-item.notif-down .notification-message { color: #dc2626; }
 
 .notification-item.is-new-highlight {
     animation: newNotificationFlash 2.4s ease;
@@ -1545,11 +1545,11 @@ tr:hover td {
 }
  
 .icon-btn.danger {
-    color: #dc2626;
+    color: #16a34a;
 }
  
 .icon-btn.danger:hover {
-    background: #fef2f2;
+    background: #f0fdf4;
     border-color: #fecaca;
 }
  
@@ -2334,15 +2334,15 @@ body.dark-mode .notification-item:hover {
 }
  
 body.dark-mode .notification-item.notif-up {
-    border-left: 3px solid #ef4444;
-    background: #fef2f2;
-}
-.notification-item.notif-up .notification-message { color: #dc2626; }
-.notification-item.notif-down {
     border-left: 3px solid #22c55e;
     background: #f0fdf4;
 }
-.notification-item.notif-down .notification-message { color: #16a34a; }
+.notification-item.notif-up .notification-message { color: #16a34a; }
+.notification-item.notif-down {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+}
+.notification-item.notif-down .notification-message { color: #dc2626; }
 
 .notification-item.is-new-highlight {
     animation: newNotificationFlashDark 2.4s ease;
@@ -2515,11 +2515,11 @@ body.dark-mode .cmp-position-badge {
 }
 
 .price-status.success {
-    color: #16a34a;
+    color: #dc2626;
 }
 
 .price-status.error {
-    color: #dc2626;
+    color: #16a34a;
 }
 .topbar,
 .topbar-right,

@@ -17,12 +17,20 @@ class Product extends Model
         'pcd_price',
         'is_active',
         'scan_priority',
+        'discount_percent',
+        'delivery_price',
+        'new_price',
+        'new_price_updated_at',
     ];
 
     protected $casts = [
         'our_price' => 'float',
         'pcd_price' => 'float',
         'is_active' => 'boolean',
+        'discount_percent' => 'float',
+        'delivery_price' => 'float',
+        'new_price' => 'float',
+        'new_price_updated_at' => 'datetime',
     ];
 
     public function priceHistories()

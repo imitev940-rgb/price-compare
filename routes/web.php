@@ -10,6 +10,7 @@ use App\Http\Controllers\CompetitorLinkController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\PriceCheckController;
 use App\Http\Controllers\PriceHistoryController;
+use App\Http\Controllers\PriceControlController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ScanDashboardController;
@@ -107,6 +108,12 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     // PRICE HISTORY
     // ===============================
     Route::get('/price-history', [PriceHistoryController::class, 'index'])->name('price-history.index');
+
+    Route::get('/price-control', [PriceControlController::class, 'index'])->name('priceControlIndex');
+    Route::post('/price-control/save', [PriceControlController::class, 'save'])->name('priceControlSave');
+    Route::get('/price-control/history', [PriceControlController::class, 'history'])->name('priceControlHistory');
+    Route::get('/price-control/snapshot/{id}/download', [PriceControlController::class, 'downloadSnapshot'])->name('priceControlDownload');
+    Route::post('/price-control/product/{product}', [PriceControlController::class, 'updateProduct'])->name('priceControlUpdate');
 
     // ===============================
     // NOTIFICATIONS

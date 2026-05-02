@@ -81,6 +81,13 @@
                     {{ __('messages.price_history') }}
                 </span>
             </a>
+
+            <a href="/price-control" class="{{ request()->is('price-control*') ? 'active' : '' }}">
+                <span class="nav-item">
+                    <i data-lucide="sliders-horizontal"></i>
+                    Price Control
+                </span>
+            </a>
         </nav>
 
         <div class="sidebar-bottom"></div>

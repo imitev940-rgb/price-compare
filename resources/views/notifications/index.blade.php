@@ -20,22 +20,22 @@
                 <div style="font-size: 32px; font-weight: 700; color:#1e3a8a;">{{ $summary['total'] }}</div>
             </div>
         </div>
-        <div style="background: linear-gradient(135deg,#dcfce7,#bbf7d0); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display:flex; align-items:center; gap:16px;">
-            <div style="background:rgba(255,255,255,0.5); padding:12px; border-radius:10px;">
-                <i data-lucide="trending-down" style="width:28px; height:28px; color:#15803d;"></i>
-            </div>
-            <div>
-                <div style="font-size: 12px; color:#15803d; text-transform: uppercase; font-weight: 600;">Поевтиняли</div>
-                <div style="font-size: 32px; font-weight: 700; color:#14532d;">{{ $summary['cheaper'] }}</div>
-            </div>
-        </div>
         <div style="background: linear-gradient(135deg,#fee2e2,#fecaca); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display:flex; align-items:center; gap:16px;">
             <div style="background:rgba(255,255,255,0.5); padding:12px; border-radius:10px;">
-                <i data-lucide="trending-up" style="width:28px; height:28px; color:#991b1b;"></i>
+                <i data-lucide="trending-down" style="width:28px; height:28px; color:#991b1b;"></i>
             </div>
             <div>
-                <div style="font-size: 12px; color:#991b1b; text-transform: uppercase; font-weight: 600;">Поскъпнали</div>
-                <div style="font-size: 32px; font-weight: 700; color:#7f1d1d;">{{ $summary['pricier'] }}</div>
+                <div style="font-size: 12px; color:#991b1b; text-transform: uppercase; font-weight: 600;">Поевтиняли</div>
+                <div style="font-size: 32px; font-weight: 700; color:#7f1d1d;">{{ $summary['cheaper'] }}</div>
+            </div>
+        </div>
+        <div style="background: linear-gradient(135deg,#dcfce7,#bbf7d0); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display:flex; align-items:center; gap:16px;">
+            <div style="background:rgba(255,255,255,0.5); padding:12px; border-radius:10px;">
+                <i data-lucide="trending-up" style="width:28px; height:28px; color:#15803d;"></i>
+            </div>
+            <div>
+                <div style="font-size: 12px; color:#15803d; text-transform: uppercase; font-weight: 600;">Поскъпнали</div>
+                <div style="font-size: 32px; font-weight: 700; color:#14532d;">{{ $summary['pricier'] }}</div>
             </div>
         </div>
         <div style="background: linear-gradient(135deg,#fef3c7,#fde68a); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display:flex; align-items:center; gap:16px;">
@@ -128,8 +128,8 @@
                         </div>
                     @endif
                     <div style="font-size:12px; color:#6b7280; margin-top:4px;">
-                        <span style="color:#15803d;">▼ {{ $data['cheaper'] }}</span> ·
-                        <span style="color:#991b1b;">▲ {{ $data['pricier'] }}</span>
+                        <span style="color:#991b1b;">▼ {{ $data['cheaper'] }}</span> ·
+                        <span style="color:#15803d;">▲ {{ $data['pricier'] }}</span>
                     </div>
                 </div>
             @endforeach
@@ -151,7 +151,7 @@
                         <div style="font-weight:500; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ $n->product->name ?? 'Продукт' }}</div>
                         <div style="font-size:12px; color:#9ca3af;">{{ $n->store->name ?? '-' }} · {{ $n->old_price }}€ → {{ $n->new_price }}€</div>
                     </div>
-                    <div style="font-weight:700; padding:4px 12px; border-radius:20px; {{ $n->price_change_percent < 0 ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#991b1b;' }}">
+                    <div style="font-weight:700; padding:4px 12px; border-radius:20px; {{ $n->price_change_percent < 0 ? 'background:#fee2e2; color:#991b1b;' : 'background:#dcfce7; color:#15803d;' }}">
                         {{ $n->price_change_percent > 0 ? '+' : '' }}{{ $n->price_change_percent }}%
                     </div>
                 </div>
@@ -174,7 +174,7 @@
                         <div style="font-size:12px; color:#9ca3af; margin-top:4px;">{{ $n->created_at->diffForHumans() }}</div>
                     </div>
                     @if($n->price_change_percent !== null)
-                        <div style="flex-shrink:0; font-weight:600; padding:3px 10px; border-radius:12px; font-size:13px; {{ $n->price_change_percent < 0 ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#991b1b;' }}">
+                        <div style="flex-shrink:0; font-weight:600; padding:3px 10px; border-radius:12px; font-size:13px; {{ $n->price_change_percent < 0 ? 'background:#fee2e2; color:#991b1b;' : 'background:#dcfce7; color:#15803d;' }}">
                             {{ $n->price_change_percent < 0 ? '▼' : '▲' }} {{ abs($n->price_change_percent) }}%
                         </div>
                     @endif

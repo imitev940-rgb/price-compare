@@ -272,7 +272,8 @@
                 <th class="col-offers">Offers</th>
                 <th class="col-position">Position</th>
                 <th class="col-diff">Diff €</th>
-                <th class="col-diff_percent">Diff %</th>
+                                <th class="col-diff_percent">Diff %</th>
+                <th class="col-price-edit"></th>
                 <th class="col-toggle"></th>
             </tr>
         </thead>
@@ -572,6 +573,36 @@
                         @endif
                     </td>
 
+                    <td class="col-price-edit" style="text-align:center; width:36px;">
+                        <button
+                            type="button"
+                            class="price-edit-btn"
+                            data-product-id="{{ $product->id }}"
+                            data-product-name="{{ $product->name }}"
+                            data-product-sku="{{ $product->sku ?? '' }}"
+                            data-pcd="{{ $product->pcd_price ?? '' }}"
+                            data-our-price="{{ $product->our_price ?? '' }}"
+                            data-lowest="{{ $product->lowest_price_overall ?? '' }}"
+                            data-lowest-store="{{ $product->lowest_store_name ?? '' }}"
+                            data-discount="{{ $product->discount_percent ?? '' }}"
+                            data-delivery="{{ $product->delivery_price ?? '' }}"
+                            data-new-price="{{ $product->new_price ?? '' }}"
+                            title="Редактирай цена"
+                            style="background:transparent; border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; cursor:pointer; color:#6b7280;"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="4" y1="21" x2="4" y2="14"/>
+                                <line x1="4" y1="10" x2="4" y2="3"/>
+                                <line x1="12" y1="21" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12" y2="3"/>
+                                <line x1="20" y1="21" x2="20" y2="16"/>
+                                <line x1="20" y1="12" x2="20" y2="3"/>
+                                <line x1="1" y1="14" x2="7" y2="14"/>
+                                <line x1="9" y1="8" x2="15" y2="8"/>
+                                <line x1="17" y1="16" x2="23" y2="16"/>
+                            </svg>
+                        </button>
+                    </td>
                     <td class="col-toggle">
                         @if(($product->pazaruvaj_offers_list ?? collect())->count() > 0)
                             <button
@@ -1432,4 +1463,246 @@
     font-weight: 700;
 }
 </style>
+{{-- ========================================================================
+     PRICE EDIT MODAL — добавено за PriceControl интеграция
+     ИЗОЛИРАНО — не пипа съществуващ JS код
+======================================================================== --}}
+<div id="priceEditModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:white; border-radius:12px; max-width:520px; width:100%; max-height:90vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+            <div style="flex:1;">
+                <p id="pemSku" style="font-size:11px; color:#9ca3af; letter-spacing:0.04em; margin:0 0 4px;"></p>
+                <p id="pemName" style="font-weight:500; font-size:16px; color:#111827; margin:0; line-height:1.4;"></p>
+            </div>
+            <button type="button" id="pemClose" style="background:transparent; border:none; font-size:24px; color:#9ca3af; cursor:pointer; padding:0 0 0 12px; line-height:1;">×</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+            <div style="background:#f9fafb; border-radius:8px; padding:12px;">
+                <p style="font-size:11px; color:#6b7280; letter-spacing:0.04em; margin:0 0 4px;">ПЦД (БАЗОВА)</p>
+                <p id="pemPcd" style="font-size:18px; font-weight:600; color:#111827; margin:0;">—</p>
+            </div>
+            <div style="background:#f9fafb; border-radius:8px; padding:12px;">
+                <p style="font-size:11px; color:#6b7280; letter-spacing:0.04em; margin:0 0 4px;">OUR PRICE</p>
+                <p id="pemOurPrice" style="font-size:18px; font-weight:600; color:#111827; margin:0;">—</p>
+            </div>
+        </div>
+
+        <div id="pemLowestBox" style="background:#fef3c7; border-radius:8px; padding:10px 12px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:12px; color:#92400e;">ННЦ (най-ниска)</span>
+            <span id="pemLowest" style="font-size:14px; font-weight:600; color:#7c2d12;">—</span>
+        </div>
+
+        <div style="font-size:11px; color:#9ca3af; letter-spacing:0.04em; margin-bottom:8px;">ОТСТЪПКА ОТ ДОСТАВЧИК</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+            <div>
+                <label style="font-size:12px; color:#6b7280; display:block; margin-bottom:4px;">% отстъпка</label>
+                <input type="number" id="pemDiscount" step="0.01" min="0" max="100" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; text-align:right;">
+            </div>
+            <div>
+                <label style="font-size:12px; color:#6b7280; display:block; margin-bottom:4px;">ДЦ (доставна)</label>
+                <input type="number" id="pemDelivery" step="0.01" min="0" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; text-align:right;">
+            </div>
+        </div>
+
+        <div style="font-size:11px; color:#9ca3af; letter-spacing:0.04em; margin-bottom:8px;">НОВА ПРОДАЖНА ЦЕНА</div>
+        <input type="number" id="pemNewPrice" step="0.01" min="0" style="width:100%; box-sizing:border-box; padding:10px 14px; border:1px solid #d1d5db; border-radius:6px; font-size:16px; font-weight:600; text-align:right; margin-bottom:16px;">
+
+        <div style="background:#f9fafb; border-radius:8px; padding:12px; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:6px; border-bottom:1px solid #e5e7eb;">
+                <span style="font-size:12px; color:#6b7280;">Марж (Нова − ДЦ)</span>
+                <span id="pemMargin" style="font-size:14px; font-weight:600; color:#111827;">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px;">
+                <span style="font-size:12px; color:#6b7280;">Разлика от ПЦД</span>
+                <span id="pemDiffBase" style="font-size:14px; font-weight:600; color:#111827;">—</span>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button type="button" id="pemCancel" style="padding:10px 18px; background:#f3f4f6; color:#374151; border:none; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer;">Отказ</button>
+            <button type="button" id="pemSave" style="padding:10px 18px; background:#185fa5; color:white; border:none; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer;">Запази</button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    var modal = document.getElementById('priceEditModal');
+    if (!modal) return;
+
+    var elClose = document.getElementById('pemClose');
+    var elCancel = document.getElementById('pemCancel');
+    var elSave = document.getElementById('pemSave');
+    var elSku = document.getElementById('pemSku');
+    var elName = document.getElementById('pemName');
+    var elPcd = document.getElementById('pemPcd');
+    var elOurPrice = document.getElementById('pemOurPrice');
+    var elLowest = document.getElementById('pemLowest');
+    var elLowestBox = document.getElementById('pemLowestBox');
+    var elDiscount = document.getElementById('pemDiscount');
+    var elDelivery = document.getElementById('pemDelivery');
+    var elNewPrice = document.getElementById('pemNewPrice');
+    var elMargin = document.getElementById('pemMargin');
+    var elDiffBase = document.getElementById('pemDiffBase');
+
+    var currentProductId = null;
+    var currentPcd = null;
+
+    function openModal(btn) {
+        currentProductId = btn.getAttribute('data-product-id');
+        currentPcd = parseFloat(btn.getAttribute('data-pcd')) || null;
+        var ourPrice = parseFloat(btn.getAttribute('data-our-price')) || null;
+        var lowest = parseFloat(btn.getAttribute('data-lowest')) || null;
+        var lowestStore = btn.getAttribute('data-lowest-store') || '';
+        var sku = btn.getAttribute('data-product-sku') || '';
+        var name = btn.getAttribute('data-product-name') || '';
+        var discount = parseFloat(btn.getAttribute('data-discount')) || null;
+        var delivery = parseFloat(btn.getAttribute('data-delivery')) || null;
+        var newPrice = parseFloat(btn.getAttribute('data-new-price')) || null;
+
+        elSku.textContent = sku ? 'SKU ' + sku : '';
+        elName.textContent = name;
+        elPcd.textContent = currentPcd !== null ? currentPcd.toFixed(2) + ' €' : '—';
+        elOurPrice.textContent = ourPrice !== null ? ourPrice.toFixed(2) + ' €' : '—';
+
+        if (lowest !== null) {
+            elLowest.textContent = lowest.toFixed(2) + ' €' + (lowestStore ? ' · ' + lowestStore : '');
+            elLowestBox.style.display = 'flex';
+        } else {
+            elLowestBox.style.display = 'none';
+        }
+
+        elDiscount.value = discount !== null ? discount : '';
+        elDelivery.value = delivery !== null ? delivery : '';
+        elNewPrice.value = newPrice !== null ? newPrice : '';
+
+        recalc();
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+        currentProductId = null;
+    }
+
+    function recalc() {
+        var newP = parseFloat(elNewPrice.value);
+        var dc = parseFloat(elDelivery.value);
+
+        if (!isNaN(newP) && !isNaN(dc)) {
+            var margin = newP - dc;
+            var marginPct = dc > 0 ? (margin / dc * 100) : 0;
+            var color = margin >= 0 ? '#0F6E56' : '#993C1D';
+            elMargin.textContent = (margin >= 0 ? '+' : '') + margin.toFixed(2) + ' € (' + marginPct.toFixed(2) + '%)';
+            elMargin.style.color = color;
+        } else {
+            elMargin.textContent = '—';
+            elMargin.style.color = '#111827';
+        }
+
+        if (!isNaN(newP) && currentPcd !== null) {
+            var diff = newP - currentPcd;
+            var diffPct = currentPcd > 0 ? (diff / currentPcd * 100) : 0;
+            var color2 = diff >= 0 ? '#0F6E56' : '#993C1D';
+            elDiffBase.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(2) + ' € (' + diffPct.toFixed(2) + '%)';
+            elDiffBase.style.color = color2;
+        } else {
+            elDiffBase.textContent = '—';
+            elDiffBase.style.color = '#111827';
+        }
+    }
+
+    elDiscount.addEventListener('input', function() {
+        var pct = parseFloat(this.value);
+        if (!isNaN(pct) && currentPcd !== null) {
+            elDelivery.value = (currentPcd * (1 - pct / 100)).toFixed(2);
+        }
+        recalc();
+    });
+
+    elDelivery.addEventListener('input', function() {
+        var dc = parseFloat(this.value);
+        if (!isNaN(dc) && currentPcd !== null && currentPcd > 0) {
+            elDiscount.value = ((1 - dc / currentPcd) * 100).toFixed(2);
+        }
+        recalc();
+    });
+
+    elNewPrice.addEventListener('input', recalc);
+
+    elClose.addEventListener('click', closeModal);
+    elCancel.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+
+    elSave.addEventListener('click', function() {
+        if (!currentProductId) return;
+
+        var data = {
+            discount_percent: parseFloat(elDiscount.value) || null,
+            delivery_price: parseFloat(elDelivery.value) || null,
+            new_price: parseFloat(elNewPrice.value) || null,
+        };
+
+        elSave.disabled = true;
+        elSave.textContent = 'Запазване...';
+
+        var url = '/price-control/product/' + currentProductId;
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrf ? csrf.getAttribute('content') : '',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(data),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            elSave.disabled = false;
+            elSave.textContent = 'Запази';
+            if (res.success) {
+                closeModal();
+                var btn = document.querySelector('.price-edit-btn[data-product-id="' + currentProductId + '"]');
+                if (btn) {
+                    btn.style.borderColor = '#fbbf24';
+                    btn.style.color = '#92400e';
+                    btn.title = 'Има pending промяна';
+                    btn.setAttribute('data-discount', data.discount_percent || '');
+                    btn.setAttribute('data-delivery', data.delivery_price || '');
+                    btn.setAttribute('data-new-price', data.new_price || '');
+                }
+            } else {
+                alert('Грешка при запазване');
+            }
+        })
+        .catch(function(e) {
+            elSave.disabled = false;
+            elSave.textContent = 'Запази';
+            alert('Грешка: ' + e.message);
+        });
+    });
+
+    document.querySelectorAll('.price-edit-btn').forEach(function(btn) {
+        if (btn.getAttribute('data-new-price') || btn.getAttribute('data-discount') || btn.getAttribute('data-delivery')) {
+            btn.style.borderColor = '#fbbf24';
+            btn.style.color = '#92400e';
+            btn.title = 'Има pending промяна';
+        }
+        btn.addEventListener('click', function() { openModal(this); });
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
+    });
+})();
+</script>
 @endsection
