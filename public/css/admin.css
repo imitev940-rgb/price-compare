@@ -1163,7 +1163,7 @@ tr:hover td {
 }
  
 .dropdown-logout-btn:hover {
-    background: #f0fdf4;
+    background: #fef2f2;
 }
  
 .dashboard-footer {
@@ -1451,7 +1451,7 @@ tr:hover td {
  
 .notification-item.notif-up {
     border-left: 3px solid #22c55e;
-    background: #f0fdf4;
+    background: #fef2f2;
 }
 .notification-item.notif-up .notification-message { color: #16a34a; }
 .notification-item.notif-down {
@@ -1545,11 +1545,11 @@ tr:hover td {
 }
  
 .icon-btn.danger {
-    color: #16a34a;
+    color: #dc2626;
 }
  
 .icon-btn.danger:hover {
-    background: #f0fdf4;
+    background: #fef2f2;
     border-color: #fecaca;
 }
  
@@ -2335,7 +2335,7 @@ body.dark-mode .notification-item:hover {
  
 body.dark-mode .notification-item.notif-up {
     border-left: 3px solid #22c55e;
-    background: #f0fdf4;
+    background: #fef2f2;
 }
 .notification-item.notif-up .notification-message { color: #16a34a; }
 .notification-item.notif-down {
