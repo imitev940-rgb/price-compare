@@ -303,10 +303,18 @@
                     </td>
 
                     <td class="cmp-price col-lowest">
-                        @if($product->lowest_market_price !== null)
-                            <span class="cmp-lowest-price-text">{{ number_format((float) $product->lowest_market_price, 2) }}</span>
-                            @if($product->pazaruvaj_lowest_store ?? null)
-                                <span class="lowest-store-info" data-store="{{ $product->pazaruvaj_lowest_store ?? '' }}" onclick="showStoreTooltip(event, this)">ℹ</span>
+                        @if($product->lowest_price_overall !== null)
+                            @php
+                                $colorClass = match($product->lowest_color_status ?? null) {
+                                    'green'  => 'cmp-lowest-green',
+                                    'orange' => 'cmp-lowest-orange',
+                                    'red'    => 'cmp-lowest-red',
+                                    default  => '',
+                                };
+                            @endphp
+                            <span class="cmp-lowest-price-text {{ $colorClass }}">{{ number_format((float) $product->lowest_price_overall, 2) }}</span>
+                            @if($product->lowest_store_name ?? null)
+                                <span class="lowest-store-info" data-store="{{ $product->lowest_store_name }}" onclick="showStoreTooltip(event, this)">ℹ</span>
                             @endif
                         @else
                             —
@@ -1407,5 +1415,21 @@
 .dark-mode *::-webkit-scrollbar-track { background: #0b1220; border-radius: 999px; }
 .dark-mode *::-webkit-scrollbar-thumb { background: #223a5e; border-radius: 999px; border: 2px solid #0b1220; }
 .dark-mode *::-webkit-scrollbar-thumb:hover { background: #2f5ea8; }
+
+.comparison-page-only .cmp-lowest-green {
+    color: #15803d !important;
+    background: #dcfce7 !important;
+    font-weight: 700;
+}
+.comparison-page-only .cmp-lowest-orange {
+    color: #c2410c !important;
+    background: #ffedd5 !important;
+    font-weight: 700;
+}
+.comparison-page-only .cmp-lowest-red {
+    color: #b91c1c !important;
+    background: #fee2e2 !important;
+    font-weight: 700;
+}
 </style>
 @endsection

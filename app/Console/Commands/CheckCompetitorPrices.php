@@ -234,7 +234,7 @@ class CheckCompetitorPrices extends Command
     {
         // Специален script за Zora (с proxy)
         $scriptPath = str_contains($url, 'zora.bg')
-            ? base_path('scripts/scrape-zora.js')
+            ? $this->scriptPath
             : $this->scriptPath;
 
         if (! file_exists($scriptPath)) {

@@ -250,6 +250,72 @@ class ComparisonController extends Controller
                 $zoraPrice,
             ])->filter(fn ($price) => $price !== null && $price > 0)->min();
 
+            // ===== LOWEST COLUMN LOGIC =====
+            // Build list of all stores including our price
+            $allStoresForLowest = [];
+            if ($ourPrice !== null && $ourPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Технника.БГ', 'price' => (float) $ourPrice, 'is_us' => true];
+            }
+            if ($technopolisPrice !== null && $technopolisPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Technopolis', 'price' => (float) $technopolisPrice, 'is_us' => false];
+            }
+            if ($technomarketPrice !== null && $technomarketPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Technomarket', 'price' => (float) $technomarketPrice, 'is_us' => false];
+            }
+            if ($techmartPrice !== null && $techmartPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Techmart', 'price' => (float) $techmartPrice, 'is_us' => false];
+            }
+            if ($tehnomixPrice !== null && $tehnomixPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Tehnomix', 'price' => (float) $tehnomixPrice, 'is_us' => false];
+            }
+            if ($zoraPrice !== null && $zoraPrice > 0) {
+                $allStoresForLowest[] = ['store' => 'Zora', 'price' => (float) $zoraPrice, 'is_us' => false];
+            }
+            // Add Pazaruvaj sub-stores from offers list
+            if (!empty($pazaruvajOffers)) {
+                foreach ($pazaruvajOffers as $pzOffer) {
+                    if (isset($pzOffer['price']) && $pzOffer['price'] > 0) {
+                        $storeName = $pzOffer['store_name'] ?? 'Pazaruvaj';
+                        $normalizedName = mb_strtolower(str_replace([' ', '-', '_', '.'], '', $storeName));
+                        $isOurStore = str_contains($normalizedName, 'technika') || str_contains($normalizedName, 'техника') || str_contains($normalizedName, 'технника');
+                        $allStoresForLowest[] = ['store' => $storeName, 'price' => (float) $pzOffer['price'], 'is_us' => $isOurStore];
+                    }
+                }
+            }
+
+            // Sort by price ascending
+            usort($allStoresForLowest, fn ($a, $b) => $a['price'] <=> $b['price']);
+
+            // Determine lowest price overall and which store
+            $lowestPriceOverall = null;
+            $lowestStoreName = null;
+            $lowestColorStatus = null;
+            if (!empty($allStoresForLowest)) {
+                $lowestPriceOverall = $allStoresForLowest[0]['price'];
+                $lowestStoreName = $allStoresForLowest[0]['store'];
+
+                // Color logic: compare our price with competitors only
+                $competitorPrices = array_column(
+                    array_filter($allStoresForLowest, fn ($s) => !$s['is_us']),
+                    'price'
+                );
+                if ($ourPrice !== null && $ourPrice > 0) {
+                    if (empty($competitorPrices)) {
+                        // No competitors at all - we are the only seller, mark as green
+                        $lowestColorStatus = 'green';
+                    } else {
+                        $minCompetitor = min($competitorPrices);
+                        if ((float) $ourPrice < $minCompetitor) {
+                            $lowestColorStatus = 'green'; // we are cheapest
+                        } elseif ((float) $ourPrice == $minCompetitor) {
+                            $lowestColorStatus = 'orange'; // tied
+                        } else {
+                            $lowestColorStatus = 'red'; // competitor is cheaper
+                        }
+                    }
+                }
+            }
+
             $differenceAmount  = null;
             $differencePercent = null;
 
@@ -283,6 +349,9 @@ class ComparisonController extends Controller
             $product->pcd_price         = $this->normalizePrice($product->pcd_price);
             $product->lowest_direct_price = $lowestDirectPrice;
             $product->lowest_market_price = $lowestMarketPrice;
+            $product->lowest_price_overall = $lowestPriceOverall;
+            $product->lowest_store_name = $lowestStoreName;
+            $product->lowest_color_status = $lowestColorStatus;
 
             $product->pazaruvaj_lowest_price  = $pazaruvajLowest;
             $product->pazaruvaj_lowest_store  = $pazaruvajLowestStore;

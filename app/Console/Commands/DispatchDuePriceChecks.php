@@ -80,7 +80,11 @@ class DispatchDuePriceChecks extends Command
                     continue;
                 }
 
-                $queueName = $priority === 'top' ? 'price_top' : 'price';
+                if ($storeName === 'zora') {
+                    $queueName = 'zora';
+                } else {
+                    $queueName = $priority === 'top' ? 'price_top' : 'price';
+                }
 
                 $storeCounters[$storeName] = ($storeCounters[$storeName] ?? 0) + 1;
                 $delayMultiplier = in_array($storeName, ['zora', 'tehnomix']) ? 5 
