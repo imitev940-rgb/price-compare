@@ -1451,7 +1451,7 @@ tr:hover td {
  
 .notification-item.notif-up {
     border-left: 3px solid #22c55e;
-    background: #fef2f2;
+    background: #f0fdf4;
 }
 .notification-item.notif-up .notification-message { color: #16a34a; }
 .notification-item.notif-down {
@@ -2335,7 +2335,7 @@ body.dark-mode .notification-item:hover {
  
 body.dark-mode .notification-item.notif-up {
     border-left: 3px solid #22c55e;
-    background: #fef2f2;
+    background: #f0fdf4;
 }
 .notification-item.notif-up .notification-message { color: #16a34a; }
 .notification-item.notif-down {
